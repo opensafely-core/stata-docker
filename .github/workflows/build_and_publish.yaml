@@ -1,7 +1,7 @@
 name: Build docker image and publish
 on:
   push:
-    branches: [master]
+    branches: [main]
 env:
   IMAGE_NAME: stata-mp
 jobs:
