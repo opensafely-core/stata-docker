@@ -24,10 +24,16 @@ following into the `bin/` subdirectory:
 ## Relicensing Stata
 
 The docker image contains the machinery needed to update the license. To
-generate a new license file, first obtain the new serial number, code, and
-authorisation. Then run:
+generate a new license file, first obtain the new details:
+
+ - serial number: 12 digit number, e.g. "12345678901"
+ - code: 46 character string with spaces, e.g. "abcd efgh ijkl abcd efgh ijkl abcd efgh ijkl a"
+ - authorisation: 4 character string, e.g. "wxyz"
+
+Then run:
 
     docker run --rm -v $PWD:/src -w /usr/local/stata --entrypoint /src/scripts/renew-license.sh ghcr.io/opensafely-core/stata-mp "SERIAL" "CODE" "AUTH"
+
 
 The resulting file will be copied to `./stata.lic` (note: due to docker
 shenanigans, it will be owned by root). You can test this works with:
