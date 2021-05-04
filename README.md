@@ -16,10 +16,37 @@ To build, install Stata locally, apply your licence, and then copy the
 following into the `bin/` subdirectory:
 
 * `/usr/local/stata/bin/stata*`
+* `/usr/local/stata/bin/stinit`
 * `/usr/local/stata/bin/ado/`
 * `/usr/local/stata/utilities/`
 
+
 ## Relicensing Stata
 
-To relicense, apply the licence locally, and then copy
-`/usr/local/stata/stata.lic` into `bin/`.
+The docker image contains the machinery needed to update the license. To
+generate a new license file, first obtain the new details:
+
+ - serial number: 12 digit number, e.g. "12345678901"
+ - code: 46 character string with spaces, e.g. "abcd efgh ijkl abcd efgh ijkl abcd efgh ijkl a"
+ - authorisation: 4 character string, e.g. "wxyz"
+
+Then run:
+
+    docker run --rm -v $PWD:/src -w /usr/local/stata --entrypoint /src/scripts/renew-license.sh ghcr.io/opensafely-core/stata-mp "SERIAL" "CODE" "AUTH"
+
+
+The resulting file will be copied to `./stata.lic` (note: due to docker
+shenanigans, it will be owned by root). You can test this works with:
+
+    ./scripts/test-license.sh
+
+The contents of this license file can then be used to update the `STATA_LICENSE`
+env var for job-runner. You should also update the `stata.lic` file in
+[https://github.com/opensafely/server-instructions](https://github.com/opensafely/server-instruction)
+to the new version.
+
+The process above uses the current stata-mp docker image to run stata's
+`stinit` process which can validate the license details.  This script is
+interactive, so we use the `expect` tool to provide it the input it needs (see
+`scripts/stinit.exp`).
+

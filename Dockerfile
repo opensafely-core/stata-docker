@@ -1,7 +1,7 @@
 FROM ghcr.io/opensafely/base-docker
 
 # stata needs libpng16
-RUN apt-get update && apt-get install -y libpng16-16  python3
+RUN apt-get update && apt-get install -y libpng16-16  python3 expect
 
 RUN mkdir -p /usr/local/stata
 COPY bin/ /usr/local/stata
