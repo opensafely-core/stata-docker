@@ -10,6 +10,6 @@ RUN mkdir /workspace
 WORKDIR /workspace
 RUN mkdir -p /root/ado/plus
 COPY libraries/ /root/ado/plus
-COPY entrypoint.py /root/
+COPY entrypoint.sh /root/
 
-ENTRYPOINT ["/usr/bin/python3", "/root/entrypoint.py"]
+ENTRYPOINT ["/root/entrypoint.sh"]
