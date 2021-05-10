@@ -14,7 +14,7 @@ try() {
     local script=$2
     local fail=${3:-}
     code=0
-    docker run --rm -e STATA_LICENSE="$STATA_LICENSE" -v "$PWD/tests:/workspace" "$image" "$script" > "$output" || code=$?
+    docker run --rm -e STATA_LICENSE -v "$PWD/tests:/workspace" "$image" "$script" > "$output" || code=$?
     if test "$code" == "0"; then
         if test -n "$fail"; then
             fail "$msg"

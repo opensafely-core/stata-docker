@@ -1,14 +1,33 @@
 # Stata-docker
 
-The currently packaged version is 16.1
-
 A Docker image for running Stata within the OpenSAFELY framework.
 
-As such, it expects a checked-out study repo to be mounted at `/workspace`, thus:
+It expects a study repo to be mounted at `/workspace` and take a path relative
+to that to execute. e.g. from a study directory:
 
 ```sh
- docker run --mount source=$(pwd),dst=/workspace,type=bind stata-mp analysis/model.do
+ docker run --rm -e STATA_LICENSE -v $PWD:/workspace stata-mp analysis/model.do
 ```
+
+The currently packaged version is 16.1, and requires a valid license for
+Stata-mp in the environment as `STATA_LICENSE` e.g.
+
+    export STATA_LICENSE=$(cat /path/to/stata.lic)
+
+Usually the license is taken care of by the OpenSAFELY platform
+
+## Extra libraries
+
+Comes with the following stata libraries/commandsinstalled:
+
+  - datacheck:https://ideas.repec.org/c/boc/bocode/s457246.html
+  - gzsave: https://ideas.repec.org/c/boc/bocode/s446701.html
+  - safetab: ?
+  - safecount: ?
+
+If you require extra stata libraries, you can add them to a `./libraries`
+directory in your study, and they will be available for you to use.
+
 
 ## Upgrading Stata
 
