@@ -1,0 +1,21 @@
+name: Tests
+on:
+  pull_request:
+  workflow_dispatch:
+env:
+  IMAGE_NAME: stata-mp
+  STATA_LICENSE: ${{ secrets.STATA_LICENSE }}
+jobs:
+  tests:
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Checkout
+      uses: actions/checkout@master
+    - name: install tools
+      run: sudo apt install --yes shellcheck
+    - name: Build image
+      run: make build
+    - name: Lint
+      run: make lint
+    - name: Run tests
+      run: make tests

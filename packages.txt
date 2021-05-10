@@ -1,0 +1,4 @@
+# needed by stata
+libpng16-16 
+libtinfo5 
+libncurses5
