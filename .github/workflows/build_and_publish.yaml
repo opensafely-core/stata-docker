@@ -1,9 +1,11 @@
 name: Build docker image and publish
 on:
+  workflow_dispatch:
   push:
     branches: [main]
 env:
   IMAGE_NAME: stata-mp
+  STATA_LICENSE: ${{ secrets.STATA_LICENSE }}
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -11,7 +13,11 @@ jobs:
     - name: Checkout
       uses: actions/checkout@master
     - name: Build image
-      run: docker build . --file Dockerfile --tag $IMAGE_NAME
+      run: make build
+    - name: Lint
+      run: make lint
+    - name: Run tests
+      run: make tests
     - name: Log into GitHub Container Registry
       run: docker login https://ghcr.io -u ${{ github.actor }} --password ${{ secrets.DOCKER_RW_TOKEN }}
     - name: Push image to GitHub Container Registry
