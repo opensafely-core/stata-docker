@@ -25,9 +25,10 @@ fi
 success=$(mktemp)
 wrapper=${script%.do}.wrapper.do
 
-# batch mode writes output for script.do to script.log, so we preserve that
+# batch mode writes output for script.do to script.log in PWD, so we preserve that
 # behaviour
-log=${script%.do}.log
+script_name=$(basename "$script")
+log=${script_name%.do}.log
 
 cat <<EOF > "$wrapper"
 . do "$script"
