@@ -24,6 +24,12 @@ fi
 # so we can use this as a proxy for success or failure.
 success=$(mktemp)
 wrapper=${script%.do}.wrapper.do
+
+# batch mode writes output for script.do to script.log in PWD, so we preserve that
+# behaviour
+script_name=$(basename "$script")
+log=${script_name%.do}.log
+
 cat <<EOF > "$wrapper"
 . do "$script"
 . file open output using "$success", write text replace
@@ -34,7 +40,7 @@ EOF
 # clean up wrapper afterwards, or else it leaves files owned by root in /workspace
 trap 'rm -f $wrapper' EXIT
 
-/usr/local/stata/stata "$wrapper" "$@" < /dev/null
+/usr/local/stata/stata "$wrapper" "$@" < /dev/null | tee "$log"
 
 # exit cleanly if we find the file has been written
 grep -q success "$success" 2>/dev/null
