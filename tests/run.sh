@@ -9,6 +9,7 @@ pass() { echo "PASS: $*"; }
 
 fail() { echo "FAIL: $*"; error=1; }
 
+
 try() {
     local msg=$1
     local script=$2
@@ -35,10 +36,11 @@ fail() {
     try "$1" "$2" fail
 }
 
-assert-output() {
+assert-content() {
     local msg=$1
+    local file=$2
     shift
-    if grep -q "$@" "$output"; then
+    if grep -q "$@" "$file"; then
         pass "$msg"
     else
         fail "$msg"
@@ -46,10 +48,15 @@ assert-output() {
 }
 
 
+trap 'docker run --rm -e STATA_LICENSE -v "$PWD/tests:/workspace" --entrypoint bash "$image" -c "rm *.log"' EXIT
+
 try "basic stata succeeds" success.do
-assert-output "OK in output" "^OK"
+assert-content "OK in output" "^OK" "$output"
+assert-content "OK in log" "^OK" "tests/success.log"
 
 fail "bad stata errors" failure.do
+assert-content "error in output" "badstring" "$output"
+assert-content "error in log" "badstring" "tests/failure.log"
 
 
 exit $error

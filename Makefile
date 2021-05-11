@@ -20,3 +20,8 @@ lint:
 .PHONY: test
 test:
 	@STATA_LICENSE="$(STATA_LICENSE)" ./tests/run.sh $(IMAGE_NAME)
+
+
+# docker leaves files around as root
+clean:
+	sudo rm tests/*.log
