@@ -31,7 +31,7 @@ script_name=$(basename "$script")
 log=${script_name%.do}.log
 
 cat <<EOF > "$wrapper"
-. do "$script"
+. do "$script" "$@"
 . file open output using "$success", write text replace
 . file write output "success" 
 . file close output
