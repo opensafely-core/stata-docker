@@ -1,6 +1,7 @@
 IMAGE_NAME ?= stata-mp-local
 INTERACTIVE:=$(shell [ -t 0 ] && echo 1)
 STATA_LICENSE ?= $(shell cat stata.lic)
+export STATA_LICENSE
 export DOCKER_BUILDKIT=1
 
 .PHONY: build
@@ -19,9 +20,9 @@ lint:
 
 .PHONY: test
 test:
-	@STATA_LICENSE="$(STATA_LICENSE)" ./tests/run.sh $(IMAGE_NAME)
+	./tests/run.sh $(IMAGE_NAME)
 
 
 # docker leaves files around as root
 clean:
-	sudo rm tests/*.log
+	sudo rm -f tests/*.log
