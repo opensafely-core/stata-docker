@@ -44,7 +44,7 @@ following into the `bin/` subdirectory:
 ## Relicensing Stata
 
 The docker image contains the machinery needed to update the license. To
-generate a new license file, first obtain the new details:
+generate a new license file, first obtain the new details (provided in a PDF file on license renewal):
 
  - serial number: 12 digit number, e.g. "12345678901"
  - code: 46 character string with spaces, e.g. "abcd efgh ijkl abcd efgh ijkl abcd efgh ijkl a"
@@ -52,8 +52,9 @@ generate a new license file, first obtain the new details:
 
 Then run:
 
-    docker run --rm -v $PWD:/src -w /usr/local/stata --entrypoint /src/scripts/renew-license.sh ghcr.io/opensafely-core/stata-mp "SERIAL" "CODE" "AUTH"
+    docker run --rm -v $PWD:/src -w /usr/local/stata --entrypoint /src/scripts/renew-license.sh ghcr.io/opensafely-core/stata-mp 'SERIAL' 'CODE' 'AUTH'
 
+(Note the single quotes to ensure the code/auth are passed literally.)
 
 The resulting file will be copied to `./stata.lic` (note: due to docker
 shenanigans, it will be owned by root). You can test this works with:
@@ -61,7 +62,7 @@ shenanigans, it will be owned by root). You can test this works with:
     ./scripts/test-license.sh
 
 The contents of this license file can then be used to update the `STATA_LICENSE`
-env var for job-runner. You should also update the `stata.lic` file in
+env var for job-runner (and restart the service) on all backends. You should also update the `stata.lic` file in
 [https://github.com/opensafely/server-instructions](https://github.com/opensafely/server-instruction)
 to the new version.
 
