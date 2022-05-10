@@ -18,9 +18,10 @@ Usually the license is taken care of by the OpenSAFELY platform
 
 ## Extra libraries
 
-Comes with the following stata libraries/commandsinstalled:
+Comes with the following stata libraries/commands installed:
 
   - datacheck:https://ideas.repec.org/c/boc/bocode/s457246.html
+  - itsa: https://ideas.repec.org/c/boc/bocode/s457793.html
   - gzsave: https://ideas.repec.org/c/boc/bocode/s446701.html
   - safetab: ?
   - safecount: ?
