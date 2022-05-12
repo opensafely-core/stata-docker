@@ -66,7 +66,7 @@ env var for job-runner (and restart the service) on all backends. You should als
 [https://github.com/opensafely/server-instructions](https://github.com/opensafely/server-instruction)
 to the new version.
 
-You will also need to update the organisation-wide `STATA_LICENSE` GitHub secret.
+You will also need to update the organisation-wide `STATA_LICENSE` secret in both `opensafely` and `opensafely-core` GitHub organisations.
 
 The process above uses the current stata-mp docker image to run stata's
 `stinit` process which can validate the license details.  This script is
