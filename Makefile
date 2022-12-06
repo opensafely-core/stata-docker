@@ -2,15 +2,13 @@ IMAGE_NAME ?= stata-mp-local
 INTERACTIVE:=$(shell [ -t 0 ] && echo 1)
 STATA_LICENSE ?= $(shell cat stata.lic)
 export STATA_LICENSE
-export DOCKER_BUILDKIT=1
 
-.PHONY: build
-build: BUILD_DATE=$(shell date +'%y-%m-%dT%H:%M:%S.%3NZ')
-build: GITREF=$(shell git rev-parse --short HEAD)
+export DOCKER_BUILDKIT=1
+export BUILD_DATE=$(shell date +'%y-%m-%dT%H:%M:%S.%3NZ')
+export VERSIOHN=$(shell git rev-parse --short HEAD)
+
 build:
-	docker build . --tag $(IMAGE_NAME) --progress=plain \
-		--build-arg BUILDKIT_INLINE_CACHE=1 --cache-from ghcr.io/opensafely-core/stata-mp \
-		--build-arg BUILD_DATE=$(BUILD_DATE) --build-arg GITREF=$(GITREF)
+	docker-compose build --pull stata-mp
 
 .PHONY: lint
 lint:
@@ -20,7 +18,7 @@ lint:
 
 .PHONY: test
 test:
-	./tests/run.sh $(IMAGE_NAME)
+	./tests/run.sh stata-mp
 
 
 # docker leaves files around as root
