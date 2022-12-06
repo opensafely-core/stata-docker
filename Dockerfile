@@ -34,5 +34,5 @@ ENTRYPOINT ["/root/entrypoint.sh"]
 
 # tag with build info as the very last step, as it will never be cached
 ARG BUILD_DATE
-ARG GITREF
-LABEL org.opencontainers.image.created=$BUILD_DATE org.opencontainers.image.revision=$GITREF
+ARG VERSION
+LABEL org.opencontainers.image.created=$BUILD_DATE org.opencontainers.image.revision=$VERSION
