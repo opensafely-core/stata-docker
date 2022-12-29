@@ -2,7 +2,7 @@
 set -euo pipefail
 
 test -z "${STATA_LICENSE:-}" && { echo "No STATA_LICENSE environment variable found"; exit 1; }
-echo "$STATA_LICENSE" > /usr/local/stata/stata.lic
+echo "$STATA_LICENSE" >  /tmp/stata.lic
 
 script="$1"
 shift
@@ -12,7 +12,7 @@ test -f "$script" || { echo "$script does not exist"; exit 1; }
 # make any local study libraries automatically available
 if test -d /workspace/libraries; then
     for lib in /workspace/libraries/*.ado; do
-        ln -s "$lib" /root/ado/plus/
+        ln -s "$lib" "$STATA_SITE/"
     done
 fi
 

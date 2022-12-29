@@ -2,6 +2,7 @@
 set -euo pipefail
 
 test -n "$STATA_LICENSE" || { echo "No STATA_LICENSE detected"; exit 1; }
+user="$(id -u):$(id -g)"
 
 image=${1:-stata-mp-local}
 error=0
@@ -13,7 +14,7 @@ show-fail() { echo "FAIL: $*"; error=1; }
 
 
 run-docker() {
-    docker run --rm -e STATA_LICENSE -v "$PWD/tests:/workspace" "$image" "$@" > "$output"
+    docker run --rm --user "$user" -e STATA_LICENSE -v "$PWD/tests:/workspace" "$image" "$@" > "$output"
 }
 
 
@@ -48,8 +49,10 @@ assert-content() {
     fi
 }
 
+# cleanup before we start
+rm -f tests/*.log
+rm -f tests/output/*
 
-trap 'docker run --rm -e STATA_LICENSE -v "$PWD/tests:/workspace" --entrypoint /bin/bash "$image" -c "rm -f *.log"' EXIT
 
 try "basic stata succeeds" analysis/success.do a b c
 assert-content "OK in output" "$output" "^OK" 
@@ -61,5 +64,23 @@ fail "bad stata errors" analysis/failure.do
 assert-content "error in output" "$output" "badstring"
 assert-content "error in log" "tests/failure.log" "badstring"
 
+# this tests both the gunzip functionality and also that shipped libraries are
+# loaded properly by stata
+#
+# create a gzipped csv as input
+echo -e "a,b,c\n1,2,3" > tests/output/input.csv
+gzip tests/output/input.csv
+
+# try load it, and write it out as a compressed dta
+try "handle gzip csv data" analysis/gz.do
+assert-content "data was ungzipped" "tests/output/input.csv" "1,2,3"
+
+# validate the compressed dta
+gunzip tests/output/model.dta.gz
+assert-content "dta file was ungzipped" "tests/output/model.dta" "<stata_dta>"
+
+
+try "load custom libraries" analysis/custom.do
+assert-content "custom command called" "tests/custom.log" "custom command called"
 
 exit $error
