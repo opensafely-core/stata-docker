@@ -20,17 +20,20 @@ LABEL org.opencontainers.image.title="stata-mp" \
       org.opencontainers.image.source="https://github.com/opensafely-core/stata-docker" \
       org.opensafely.action="stata-mp"
 
-RUN mkdir -p /usr/local/stata /workspace /root/ado/plus
-
 # stata needs libpng16
 COPY packages.txt /root/packages.txt
 RUN /root/docker-apt-install.sh /root/packages.txt
 
+ENV STATA_SITE=/usr/local/ado
+RUN mkdir -p /usr/local/stata /workspace $STATA_SITE && \
+    chmod 777 $STATA_SITE && \
+    ln -s /tmp/stata.lic /usr/local/stata/stata.lic
 WORKDIR /workspace
+
 COPY bin/ /usr/local/stata
-COPY libraries/ /root/ado/plus
-COPY entrypoint.sh /root/
-ENTRYPOINT ["/root/entrypoint.sh"]
+COPY libraries/* $STATA_SITE/
+COPY entrypoint.sh /usr/local/bin/
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
 # tag with build info as the very last step, as it will never be cached
 ARG BUILD_DATE
