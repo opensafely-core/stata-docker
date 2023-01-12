@@ -1,10 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-test -z "${STATA_LICENSE:-}" && { echo "No STATA_LICENSE environment variable found"; exit 1; }
-echo "$STATA_LICENSE" >  /tmp/stata.lic
-
-script="$1"
+script="${1:-}"
 shift
 
 test -f "$script" || { echo "$script does not exist"; exit 1; }
@@ -40,7 +37,7 @@ EOF
 # clean up wrapper afterwards, or else it leaves files owned by root in /workspace
 trap 'rm -f $wrapper' EXIT
 
-/usr/local/stata/stata "$wrapper" "$@" < /dev/null | tee "$log"
+/usr/local/bin/stata "$wrapper" "$@" < /dev/null | tee "$log"
 
 # exit cleanly if we find the file has been written
 grep -q success "$success" 2>/dev/null
