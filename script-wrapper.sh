@@ -20,7 +20,7 @@ fi
 # running a script, if there is an error, it will stop, and not write the file,
 # so we can use this as a proxy for success or failure.
 success=$(mktemp)
-wrapper=${script%.do}.wrapper.do
+wrapper=$(mktemp).do
 
 # batch mode writes output for script.do to script.log in PWD, so we preserve that
 # behaviour
@@ -33,9 +33,6 @@ cat <<EOF > "$wrapper"
 . file write output "success" 
 . file close output
 EOF
-
-# clean up wrapper afterwards, or else it leaves files owned by root in /workspace
-trap 'rm -f $wrapper' EXIT
 
 /usr/local/bin/stata "$wrapper" "$@" < /dev/null | tee "$log"
 
