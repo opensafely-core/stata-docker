@@ -14,7 +14,7 @@ build:
 lint:
 	@docker pull hadolint/hadolint
 	docker run --rm -i hadolint/hadolint < Dockerfile
-	shellcheck entrypoint.sh scripts/*.sh tests/*.sh
+	shellcheck *.sh scripts/*.sh tests/*.sh
 
 .PHONY: test
 test:

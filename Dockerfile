@@ -9,7 +9,7 @@
 # design.
 #
 # hadolint ignore=DL3006
-FROM ghcr.io/opensafely-core/base-docker
+FROM ghcr.io/opensafely-core/base-action
 
 # Some static metadata for this specific image, as defined by:
 # https://github.com/opencontainers/image-spec/blob/master/annotations.md#pre-defined-annotation-keys
@@ -19,6 +19,7 @@ LABEL org.opencontainers.image.title="stata-mp" \
       org.opencontainers.image.description="Stata action for opensafely.org" \
       org.opencontainers.image.source="https://github.com/opensafely-core/stata-docker" \
       org.opensafely.action="stata-mp"
+
 
 # stata needs libpng16
 COPY packages.txt /root/packages.txt
@@ -31,9 +32,11 @@ RUN mkdir -p /usr/local/stata /workspace $STATA_SITE && \
 WORKDIR /workspace
 
 COPY bin/ /usr/local/stata
+COPY stata-wrapper.sh /usr/local/bin/stata
+COPY stata-wrapper.sh /usr/local/bin/stata-mp
 COPY libraries/* $STATA_SITE/
-COPY entrypoint.sh /usr/local/bin/
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+COPY script-wrapper.sh /usr/local/bin/script-wrapper.sh
+ENV ACTION_EXEC="/usr/local/bin/script-wrapper.sh"
 
 # tag with build info as the very last step, as it will never be cached
 ARG BUILD_DATE

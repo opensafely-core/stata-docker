@@ -1,10 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-test -z "${STATA_LICENSE:-}" && { echo "No STATA_LICENSE environment variable found"; exit 1; }
-echo "$STATA_LICENSE" >  /tmp/stata.lic
-
-script="$1"
+script="${1:-}"
 shift
 
 test -f "$script" || { echo "$script does not exist"; exit 1; }
@@ -23,7 +20,7 @@ fi
 # running a script, if there is an error, it will stop, and not write the file,
 # so we can use this as a proxy for success or failure.
 success=$(mktemp)
-wrapper=${script%.do}.wrapper.do
+wrapper=$(mktemp).do
 
 # batch mode writes output for script.do to script.log in PWD, so we preserve that
 # behaviour
@@ -37,10 +34,7 @@ cat <<EOF > "$wrapper"
 . file close output
 EOF
 
-# clean up wrapper afterwards, or else it leaves files owned by root in /workspace
-trap 'rm -f $wrapper' EXIT
-
-/usr/local/stata/stata "$wrapper" "$@" < /dev/null | tee "$log"
+/usr/local/bin/stata "$wrapper" "$@" < /dev/null | tee "$log"
 
 # exit cleanly if we find the file has been written
 grep -q success "$success" 2>/dev/null
