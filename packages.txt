@@ -2,3 +2,9 @@
 libpng16-16 
 libtinfo5 
 libncurses5
+# python
+libpython3.11
+python3.11
+python3.11-distutils
+python3-pip
+python3.11-venv
