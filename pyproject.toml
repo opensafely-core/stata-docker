@@ -1,0 +1,30 @@
+[tool.black]
+extend-exclude = 'bin/'
+
+[tool.ruff]
+line-length = 88
+exclude = [
+  ".direnv",
+  ".git",
+  ".github",
+  ".venv",
+  "__pycache__",
+  "bin/",
+  "coverage",
+  "deploy",
+  "venv",
+]
+extend-select = [
+  "I",  # isort
+  "INP",  # flake8-no-pep420
+  "ISC",  # flake8-implicit-str-concat
+  "UP",  # pyupgrade
+  "W",  # pycodestyle warning
+]
+extend-ignore = [
+  "E501",
+  "E731",
+]
+
+[tool.ruff.isort]
+lines-after-imports = 2
