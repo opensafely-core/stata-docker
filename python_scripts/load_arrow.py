@@ -1,4 +1,6 @@
+import csv
 import sys
+from pathlib import Path
 
 import sfi
 from pyarrow import feather, float64, int8, int32
@@ -13,15 +15,20 @@ from pyarrow.types import (
 )
 
 
-def main(filename, max_chunksize):
-    ArrowConverter(filename, max_chunksize)
+def main(filename, aliases=None, max_chunksize=64000):
+    # max_chunksize is set, somewhat arbitrarily, to the same default value that
+    # ehrQL uses to write arrow files.
+    ArrowConverter(filename, aliases, max_chunksize)
 
 
 class ArrowConverter:
-    def __init__(self, filename, max_chunksize):
+    def __init__(self, filename, aliases_filename, max_chunksize):
         # read the feather file into a table
         print(f"Reading file {filename}")
         self.arrow_table = feather.read_table(filename)
+
+        self.aliases = self.read_aliases_file(aliases_filename)
+
         self.max_chunksize = max_chunksize
 
         stata_extended_missing = sfi.Missing.getValue()
@@ -71,6 +78,24 @@ class ArrowConverter:
         # Loads the data into Stata's memory
         self.load_data()
 
+    def read_aliases_file(self, aliases_filename):
+        aliases = {}
+        if aliases_filename is None:
+            return aliases
+        alisases_path = Path(aliases_filename)
+        if not alisases_path.exists():
+            print(f"WARNING: Aliases file not found at {aliases_filename}")
+            return aliases
+        with open(alisases_path) as aliases_csv:
+            reader = csv.reader(aliases_csv)
+            aliases = dict(row for row in reader)
+        too_long_aliases = any(key for key, value in aliases.items() if len(value) > 32)
+        if too_long_aliases:
+            raise ValueError(
+                "Aliases file contains aliases longer than the allowed length (32)"
+            )
+        return aliases
+
     def convert_int64(self):
         """
         Stata can only deal with int8, int16, int32; if we have ints that require
@@ -116,12 +141,31 @@ class ArrowConverter:
         """
         Function to ensure all of the names of the variables in the table
         are valid Stata variable names.
+        If an aliases file has been provided, use it to rename the columns.
         """
         # Creates a mapping from existing column names to names allowed by Stata
-        clean_column_names = [
-            sfi.SFIToolkit.strToName(varname, prefix=False)
-            for varname in self.arrow_table.column_names
-        ]
+        clean_column_names = []
+        # Keep a note of names that are too long so we can report those back to the user.
+        too_long_names = []
+        for varname in self.arrow_table.column_names:
+            if len(varname) > 32 and varname not in self.aliases:
+                too_long_names.append(varname)
+                continue
+            # Get the aliases name, if one exists, and run it through the sfitoolkit method to make
+            # sure it's valid for stata
+            cleaned_name = sfi.SFIToolkit.strToName(
+                self.aliases.get(varname, varname), prefix=False
+            )
+            if cleaned_name != varname:
+                print(f"{varname} aliased to {cleaned_name}")
+            clean_column_names.append(cleaned_name)
+
+        if too_long_names:
+            raise ValueError(
+                f"Invalid variable names found ({','.join(too_long_names)})\n"
+                f"To fix this, rename variables in arrow file to <32 characters.\n"
+                f"Alternatively, a CSV file of original to alias names can be provided."
+            )
         self.arrow_table = self.arrow_table.rename_columns(clean_column_names)
         return self.arrow_table.column_names
 
@@ -286,10 +330,19 @@ class ArrowConverter:
         self.apply_value_labels()
 
 
+def parse_args():
+    print(sys.argv)
+    # The stata `arrowload` command always passes 3 positional arguments
+    # The first argument is the arrow filename
+    args = dict(filename=sys.argv[1])
+    # If no aliases CSV was provided, the string "none" will be the second arg, and we
+    # can ignore it
+    if sys.argv[2] != "none":
+        args.update(aliases=sys.argv[2])
+    # Finally the max_chunksize; will be a user-specified value or the default 64000
+    args.update(max_chunksize=int(sys.argv[3]))
+    return args
+
+
 if __name__ == "__main__":
-    # max_chunksize is set, somewhat arbitrarily, to the same default value that
-    # ehrQL uses to write arrow files.
-    main(
-        filename=sys.argv[1],
-        max_chunksize=int(sys.argv[2]) if len(sys.argv) == 3 else 64000,
-    )
+    main(**parse_args())

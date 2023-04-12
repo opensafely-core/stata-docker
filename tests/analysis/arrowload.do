@@ -1,5 +1,5 @@
 // load feather file with max_chunksize of 600 (1000 rows in file)
-. arrowload output/data.arrow 600
+. arrowload "output/data.arrow", chunksize(600)
 
 . desc
 
