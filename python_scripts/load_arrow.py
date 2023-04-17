@@ -231,10 +231,6 @@ class ArrowConverter:
     def make_vars(self):
         """
         Function used to create the Stata variables in memory.
-        This assumes that the values in name_and_type object are valid
-        Stata variable names.
-        :param name_and_type: A dictionary structured to contain the variable names
-        as the keys and the storage type of the variable as the value.
         """
         # Loop over the variable name / variable type mappings and add
         # variables with the appropriate typing based on the vartype
@@ -253,10 +249,10 @@ class ArrowConverter:
     def define_value_labels(self):
         """
         Function used to define new value labels for use in Stata
-        :param mapping_list: Contains a Dictionary where the keys are the names of
-        the variables that correspond to the value labels and the values are dicts
-        that map the string labels (keys) to numeric values (values) that
-        are used to define the value labels associated with the variable.
+        Uses the value_labels generated in `get_categorical_encodings`; a dict
+        where the keys are the names of the variables that correspond to the
+        value labels and the values are dicts that map string labels to numeric
+        values that are used to define the value labels associated with the variable.
         """
         for varname, value_mapping in self.value_labels.items():
             sfi.ValueLabel.createLabel(varname)
@@ -268,7 +264,6 @@ class ArrowConverter:
         Assumes that the variable names and value label names are the
         same and assigns the variable labels to variables with the same
         names.
-        :param labelNames:
         """
         for label_name in self.value_labels.keys():
             sfi.ValueLabel.setVarValueLabel(label_name, label_name)
@@ -282,7 +277,8 @@ class ArrowConverter:
         self.define_value_labels()
 
         def _timestamp_as_sif(python_datetime):
-            """Convert a python datetime to a stata %td format (number of days
+            """
+            Convert a python datetime to a stata %td format (number of days
             since 1960-01-01)
             """
             if python_datetime is not None:
@@ -331,7 +327,6 @@ class ArrowConverter:
 
 
 def parse_args():
-    print(sys.argv)
     # The stata `arrowload` command always passes 3 positional arguments
     # The first argument is the arrow filename
     args = dict(filename=sys.argv[1])
