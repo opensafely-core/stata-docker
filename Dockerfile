@@ -7,10 +7,6 @@
 # hadolint ignore=DL3006
 FROM ghcr.io/opensafely-core/base-action:22.04 as base
 
-# we are going to use an apt cache on the host, so disable the default debian
-# docker clean up that deletes that cache on every apt install
-RUN rm -f /etc/apt/apt.conf.d/docker-clean
-
 # Add deadsnakes PPA for installing new Python versions
 # ensure fully working base python3.11 installation
 # see: https://gist.github.com/tiran/2dec9e03c6f901814f6d1e8dad09528e
@@ -22,7 +18,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
 
 # stata needs libpng16, install python dependencies
 COPY packages.txt /root/packages.txt
-RUN --mount=type=cache,target=/var/cache/apt \ 
+RUN --mount=type=cache,target=/var/cache/apt \
     /root/docker-apt-install.sh /root/packages.txt
 
 ##################################################
