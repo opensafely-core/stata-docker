@@ -85,7 +85,7 @@ COPY bin/ /usr/local/stata
 COPY stata-wrapper.sh /usr/local/bin/stata
 COPY stata-wrapper.sh /usr/local/bin/stata-mp
 COPY libraries/* $STATA_SITE/
-COPY python_scripts/load_arrow.py /python_scripts/load_arrow.py
+COPY python_scripts/ /python_scripts
 COPY script-wrapper.sh /usr/local/bin/script-wrapper.sh
 ENV ACTION_EXEC="/usr/local/bin/script-wrapper.sh"
 
