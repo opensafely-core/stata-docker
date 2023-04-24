@@ -15,19 +15,21 @@ from pyarrow.types import (
 )
 
 
-def main(filename, aliases=None, max_chunksize=64000):
+def main(filename, configfile=None, max_chunksize=64000):
     # max_chunksize is set, somewhat arbitrarily, to the same default value that
     # ehrQL uses to write arrow files.
-    ArrowConverter(filename, aliases, max_chunksize)
+    converter = ArrowConverter(filename, configfile, max_chunksize)
+    converter.load_data()
 
 
 class ArrowConverter:
-    def __init__(self, filename, aliases_filename, max_chunksize):
+    def __init__(self, filename, configfile, max_chunksize):
         # read the feather file into a table
         print(f"Reading file {filename}")
         self.arrow_table = feather.read_table(filename)
 
-        self.aliases = self.read_aliases_file(aliases_filename)
+        config = self.read_config(configfile)
+        self.aliases = self.get_aliases_from_config(config)
 
         self.max_chunksize = max_chunksize
 
@@ -75,24 +77,46 @@ class ArrowConverter:
             if vartype in ["date", "timestamp"]
         ]
 
-        # Loads the data into Stata's memory
-        self.load_data()
+    def read_config(self, configfile):
+        """
+        Read an optional config CSV file.
+        Return a list of dicts representing config options such as aliased columns.
+        """
+        config = []
+        if configfile is None:
+            return config
+        config_path = Path(configfile)
+        if not config_path.exists():
+            print(f"WARNING: Config file not found at {configfile}")
+            return config
 
-    def read_aliases_file(self, aliases_filename):
+        with open(config_path) as config_csv:
+            reader = csv.DictReader(config_csv)
+            config = [row for row in reader]
+            if not config:
+                print(
+                    f"WARNING: No data found in configfile {configfile}; does it contain headers?"
+                )
+            return config
+
+    def get_aliases_from_config(self, config):
         aliases = {}
-        if aliases_filename is None:
+        if not config:
             return aliases
-        alisases_path = Path(aliases_filename)
-        if not alisases_path.exists():
-            print(f"WARNING: Aliases file not found at {aliases_filename}")
+        # check the first config dict for the required headers
+        expected_headers = {"original_column", "aliased_column"}
+        first_row = config[0]
+        if expected_headers - set(first_row.keys()):
+            print(
+                "WARNING: file does not contain expected column headers for aliases "
+                "(original_column, aliased_column)"
+            )
             return aliases
-        with open(alisases_path) as aliases_csv:
-            reader = csv.reader(aliases_csv)
-            aliases = dict(row for row in reader)
+        aliases = {row["original_column"]: row["aliased_column"] for row in config}
         too_long_aliases = any(key for key, value in aliases.items() if len(value) > 32)
         if too_long_aliases:
             raise ValueError(
-                "Aliases file contains aliases longer than the allowed length (32)"
+                "Config file contains aliases longer than the allowed length (32)"
             )
         return aliases
 
@@ -330,10 +354,10 @@ def parse_args():
     # The stata `arrowload` command always passes 3 positional arguments
     # The first argument is the arrow filename
     args = dict(filename=sys.argv[1])
-    # If no aliases CSV was provided, the string "none" will be the second arg, and we
+    # If no config CSV was provided, the string "none" will be the second arg, and we
     # can ignore it
     if sys.argv[2] != "none":
-        args.update(aliases=sys.argv[2])
+        args.update(configfile=sys.argv[2])
     # Finally the max_chunksize; will be a user-specified value or the default 64000
     args.update(max_chunksize=int(sys.argv[3]))
     return args

@@ -4,9 +4,9 @@ cap prog drop arrowload, rclass
 prog define arrowload
     syntax anything(name=filename)   ///
     [,                               ///
-    Aliases(string)                  ///
+    Configfile(string)               ///
     Chunksize(integer 64000)         ///
     ]
-    if ( mi("`aliases'") ) local aliases none
-    python script /python_scripts/load_arrow.py, args(`filename' `aliases' `chunksize')
+    if ( mi("`configfile'") ) local configfile none
+    python script /python_scripts/load_arrow.py, args(`filename' `configfile' `chunksize')
 end

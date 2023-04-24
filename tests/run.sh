@@ -81,7 +81,7 @@ assert-content "dta file was ungzipped" "tests/output/model.dta" "<stata_dta>"
 try "load custom libraries" analysis/custom.do
 assert-content "custom command called" "tests/custom.log" "custom command called"
 
-cp tests/fixtures/data.arrow tests/output/data.arrow
+cp tests/fixtures/*.arrow tests/output/
 # Load the arrow file; contains:
 # 1000 variables, loaded in batches of 600
 # - date vars: `date` has no nulls, `died_on`` includes nulls
@@ -89,7 +89,7 @@ cp tests/fixtures/data.arrow tests/output/data.arrow
 # - int: `age`, `patient_id` (int64 in feather file, int in stata)
 # - categorical: sex (coded M/F as 0/1, no nulls), region (includes nulls)
 # - num_val: int64 in feather file (values with mean 50,000), converted to long in stata
-try "load arrow file" analysis/arrowload.do
+try "load arrow file" analysis/arrowload/arrowload.do
 expected_var_names="date   died_on   flag   age   sex      region   num_val   patient_id"
 expected_values_row1="22560         .      0    69     F        .     49850         1293"
 expected_formatted_values_row1="07oct2021         .      0    69     F        .     49850         1293"
@@ -101,5 +101,22 @@ assert-content "Contains expected variable names" "$output" "$expected_var_names
 assert-content "Contains expected values (row 1)" "$output" "$expected_values_row1"
 assert-content "Contains expected formatted values (row 1)" "$output" "$expected_formatted_values_row1"
 assert-content "Contains expected formatted values (row 4)" "$output" "$expected_formatted_values_row4"
+
+fail "load arrow file with too-long names" analysis/arrowload/arrowload-too-long.do
+assert-content "Invalid variable name error in output" "$output" "Invalid variable names found"
+
+try "load arrow file with aliased too-long names" analysis/arrowload/arrowload-too-long-aliased.do
+
+fail "load arrow file with bad aliases" analysis/arrowload/arrowload-bad-aliases.do
+assert-content "Aliases error found in output" "$output" "aliases longer than the allowed length"
+
+try "load arrow file with config file not found" analysis/arrowload/arrowload-configfile-not-found.do
+assert-content "Warning in output" "$output" "WARNING: Config file not found"
+
+try "load arrow file with no alias headers in config file (single line)" analysis/arrowload/arrowload-no-aliases-headers-1.do
+assert-content "Warning in output" "$output" "WARNING: No data found in configfile"
+
+try "load arrow file with no alias headers in config file (multiline)" analysis/arrowload/arrowload-no-aliases-headers-2.do
+assert-content "Warning in output" "$output" "WARNING: file does not contain expected column headers for aliases"
 
 exit $error
