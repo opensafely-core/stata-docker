@@ -21,6 +21,9 @@ COPY packages.txt /root/packages.txt
 RUN --mount=type=cache,target=/var/cache/apt \
     /root/docker-apt-install.sh /root/packages.txt
 
+# set PYTHONUSERBASE for installing user packages
+ENV PYTHONUSERBASE=/usr/local
+
 ##################################################
 #
 # Build image
@@ -60,11 +63,9 @@ RUN --mount=type=cache,target=/root/.cache \
 
 FROM base as stata-prod
 
-# copy /root/.local files over from builder image to get the installed python dependencies.
+# copy site-packages files over from builder image to get the installed python dependencies.
 # These will have root:root ownership, but are readable by all.
-COPY --from=builder /root/.local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-# Set PYTHONPATH to ensure they're found even when user is not root
-ENV PYTHONPATH=/usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 
 # Some static metadata for this specific image, as defined by:
 # https://github.com/opencontainers/image-spec/blob/master/annotations.md#pre-defined-annotation-keys
