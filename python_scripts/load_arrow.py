@@ -269,6 +269,8 @@ class ArrowConverter:
                 sfi.Data.addVarLong(varname)
             elif vartype in ["float", "date", "timestamp"]:
                 sfi.Data.addVarFloat(varname)
+            else:
+                assert False, f"Unhandled type: {vartype}"
 
     def define_value_labels(self):
         """
