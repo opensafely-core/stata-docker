@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 import sfi
-from pyarrow import feather, float64, int8, int32
+from pyarrow import ArrowInvalid, feather, int8, int32, string
 from pyarrow.types import (
     is_boolean,
     is_date,
@@ -129,7 +129,8 @@ class ArrowConverter:
     def convert_int64(self):
         """
         Stata can only deal with int8, int16, int32; if we have ints that require
-        int64, we need to convert them to float
+        int64, they're likely to just be identifiers. We convert them to a literal
+        string and let users deal with them later.
         First we attempt to convert to int32; if that doesn't raise an exception,
         we can leave the column as it is
         """
@@ -137,8 +138,9 @@ class ArrowConverter:
             if is_int64(self.arrow_table.schema.field(column_name).type):
                 try:
                     converted = self.arrow_table[column_name].cast(int32())
-                except Exception:
-                    converted = self.arrow_table[column_name].cast(float64())
+                except ArrowInvalid:
+                    print(f"Casting {column_name} to string")
+                    converted = self.arrow_table[column_name].cast(string())
                     self._replace_column(column_name, converted)
 
     def get_column_types(self):

@@ -88,17 +88,20 @@ cp tests/fixtures/*.arrow tests/output/
 # - boolean: `flag`
 # - int: `age`, `patient_id` (int64 in feather file, int in stata)
 # - categorical: sex (coded M/F as 0/1, no nulls), region (includes nulls)
-# - num_val: int64 in feather file (values with mean 50,000), converted to long in stata
+# - num_val: int64 in feather file (values around 50,000; < int32 max), converted to long in stata
+# - big_val: int64 in feather file (values > int32 max), converted to string
 try "load arrow file" analysis/arrowload/arrowload.do
-expected_var_names="date   died_on   flag   age   sex      region   num_val   patient_id"
-expected_values_row1="22560         .      0    69     F        .     49850         1293"
-expected_formatted_values_row1="07oct2021         .      0    69     F        .     49850         1293"
-expected_formatted_values_row4="24jul2021         .      1    52     F   E12000003     50236         8097"
+expected_var_names="patient_id    date   died_on   flag   age   sex   region   num_val"
+expected_values_row1="1   10562         .      1    34     .     East     50034"
+expected_formatted_values_row1="1   01dec1988         .      1    34     .     East     50034"
+expected_formatted_values_row4="4   01dec2007         .      0    15     .   London     50015"
 assert-content "Contains expected observations" "$output" "obs:         1,000"
 assert-content "Contains expected int variable" "$output" "age             int"
 assert-content "Contains expected long variable" "$output" "num_val         long"
+assert-content "Contains expected string variable" "$output" "big_val         strL"
 assert-content "Contains expected variable names" "$output" "$expected_var_names"
 assert-content "Contains expected values (row 1)" "$output" "$expected_values_row1"
+assert-content "Contains expected value for big_val (row 1)" "$output" "3147483655"
 assert-content "Contains expected formatted values (row 1)" "$output" "$expected_formatted_values_row1"
 assert-content "Contains expected formatted values (row 4)" "$output" "$expected_formatted_values_row4"
 
