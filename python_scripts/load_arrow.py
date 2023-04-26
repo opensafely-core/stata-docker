@@ -33,17 +33,23 @@ class ArrowConverter:
 
         self.max_chunksize = max_chunksize
 
-        stata_extended_missing = sfi.Missing.getValue()
+        # stata has 27 missing values
+        # https://www.stata.com/manuals/dmissingvalues.pdf
+        # the first of these, `.`,  is the sysmiss, which we want to use
+        # the remaining 26 are different types of missingness, which we ignore
+        # The sysmiss for byte, int and long, is the 26 less than the largest value for
+        # each type
+        stata_system_missing = sfi.Missing.getValue()  # sysmiss for float/double
         self.MISSING_VALUES = {
             "string": "",
-            "boolean": 127,
-            "int": 32767,
-            # Use stata's "extended missing" for types that will be stata float or
-            # category vars when loaded to stata
-            "date": stata_extended_missing,
-            "timestamp": stata_extended_missing,
-            "float": stata_extended_missing,
-            "category": stata_extended_missing,
+            "boolean": 101,
+            "int": 32741,
+            "long": 2147483621,
+            "category": stata_system_missing,  # category type can be long or double
+            "date": stata_system_missing,
+            "timestamp": stata_system_missing,
+            "float": stata_system_missing,
+            "double": stata_system_missing,
         }
 
         # Ensure that all variable names are valid Stata varnames
