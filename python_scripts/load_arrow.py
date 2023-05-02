@@ -66,13 +66,6 @@ class ArrowConverter:
         # Generate the value label mappings for categorical variables
         self.value_labels = self.get_categorical_encodings(self.category_variables)
 
-        # Get a list of date or timestamp typed variables
-        self.date_vars = [
-            varname
-            for varname, vartype in self.column_types.items()
-            if vartype in ["date", "timestamp"]
-        ]
-
     def read_config(self, configfile):
         """
         Read an optional config CSV file.
@@ -171,8 +164,8 @@ class ArrowConverter:
         column_test_mapping = {
             is_floating: "float",
             is_boolean: "boolean",
-            is_timestamp: "timestamp",
             is_date: "date",
+            is_timestamp: "timestamp",
             is_integer: "int",
             is_dictionary: "category",
         }
@@ -310,9 +303,9 @@ class ArrowConverter:
                 sfi.Data.addVarByte(varname)
             elif vartype == "int":
                 sfi.Data.addVarInt(varname)
-            elif vartype == "long":
+            elif vartype in ["long", "date"]:
                 sfi.Data.addVarLong(varname)
-            elif vartype in ["float", "date", "timestamp"]:
+            elif vartype in ["float", "timestamp"]:
                 sfi.Data.addVarFloat(varname)
             else:
                 assert False, f"Unhandled type: {vartype}"
@@ -370,14 +363,16 @@ class ArrowConverter:
         self.make_vars()
         self.define_value_labels()
 
-        def _timestamp_as_sif(python_datetime):
+        def _datetime_as_sif(python_datetime, column_name):
             """
-            Convert a python datetime to a stata %td format (number of days
-            since 1960-01-01)
+            Convert a python datetime to stata format
+             - dates %td (number of days since 1960-01-01)
+             - timestamps %td (number of milliseconds since 1960-01-01)
             """
+            format = "%td" if self.column_types[column_name] == "date" else "%tc"
             if python_datetime is not None:
-                return sfi.Datetime.getSIF(python_datetime, "%td")
-            return self.MISSING_VALUES["timestamp"]
+                return sfi.Datetime.getSIF(python_datetime, format)
+            return self.MISSING_VALUES[self.column_types[column_name]]
 
         next_obs = 0
         for i, batch in enumerate(self.arrow_table.to_batches(self.max_chunksize)):
@@ -405,7 +400,9 @@ class ArrowConverter:
                 else:
                     column_data = batch.columns[i].to_pylist()
                     if self.column_types[varname] in ["date", "timestamp"]:
-                        column_data = [_timestamp_as_sif(val) for val in column_data]
+                        column_data = [
+                            _datetime_as_sif(val, varname) for val in column_data
+                        ]
                 values.append(column_data)
             next_obs += batch.num_rows
 
