@@ -3,13 +3,12 @@ import sys
 from pathlib import Path
 
 import sfi
-from pyarrow import ArrowInvalid, feather, int8, int32, string
+from pyarrow import compute, feather, int8, string
 from pyarrow.types import (
     is_boolean,
     is_date,
     is_dictionary,
     is_floating,
-    is_int64,
     is_integer,
     is_timestamp,
 )
@@ -45,7 +44,6 @@ class ArrowConverter:
             "boolean": 101,
             "int": 32741,
             "long": 2147483621,
-            "category": stata_system_missing,  # category type can be long or double
             "date": stata_system_missing,
             "timestamp": stata_system_missing,
             "float": stata_system_missing,
@@ -55,11 +53,8 @@ class ArrowConverter:
         # Ensure that all variable names are valid Stata varnames
         self.column_names = self.clean_names()
 
-        # Convert any int64 columns to int32 or float
-        self.convert_int64()
-
-        # Identify the original column names and types
-        self.column_types = self.get_column_types()
+        # Identify the column names and types, and which variables are category ones
+        self.column_types, self.category_variables = self.get_column_types()
 
         # convert boolean columns to int8
         self.convert_bool_to_int()
@@ -67,14 +62,8 @@ class ArrowConverter:
         # Replace null values in original arrow table where possible at this stage
         self.replace_missing_values()
 
-        # Get a list of categorical typed variables
-        cat_vars = [
-            varname
-            for varname, vartype in self.column_types.items()
-            if vartype == "category"
-        ]
         # Generate the value label mappings for categorical variables
-        self.value_labels = self.get_categorical_encodings(cat_vars)
+        self.value_labels = self.get_categorical_encodings(self.category_variables)
 
         # Get a list of date or timestamp typed variables
         self.date_vars = [
@@ -126,22 +115,52 @@ class ArrowConverter:
             )
         return aliases
 
-    def convert_int64(self):
+    def convert_int64_column_to_string(self, column_name):
         """
         Stata can only deal with int8, int16, int32; if we have ints that require
         int64, they're likely to just be identifiers. We convert them to a literal
         string and let users deal with them later.
-        First we attempt to convert to int32; if that doesn't raise an exception,
-        we can leave the column as it is
         """
-        for column_name in self.column_names:
-            if is_int64(self.arrow_table.schema.field(column_name).type):
-                try:
-                    converted = self.arrow_table[column_name].cast(int32())
-                except ArrowInvalid:
-                    print(f"Casting {column_name} to string")
-                    converted = self.arrow_table[column_name].cast(string())
-                    self._replace_column(column_name, converted)
+        converted = self.arrow_table[column_name].cast(string())
+        self._replace_column(column_name, converted)
+
+    def get_range_for_column(self, column_name, column_type="int"):
+        """
+        Return the min and max value for a column from an arrow column
+        """
+        if column_type == "int":
+            col_range = compute.min_max(self.arrow_table[column_name]).as_py()
+            return col_range["min"], col_range["max"]
+
+        assert (
+            column_type == "category"
+        ), f"Can only get range for int or category types, got {column_type}"
+        return (0, len(self.arrow_table[column_name].chunks[0].dictionary))
+
+    def get_stata_type_from_range(
+        self, min_val, max_val, column_name, is_category=False
+    ):
+        """
+        Identify the appropriate integer type from the range of values in this
+        batch
+        Note that due to stata's treatment of missing values, the max valid
+        value is 27 less than the largest value for that type
+        https://www.stata.com/manuals/dmissingvalues.pdf
+        """
+        range_to_stata_type = {
+            (-127, 100): "byte",
+            (-32_767, 32_740): "int",
+            (-2_147_483_647, 2_147_483_620): "long",
+        }
+
+        for int_range, stata_type in range_to_stata_type.items():
+            if min_val >= int_range[0] and max_val <= int_range[1]:
+                return stata_type
+
+        # range is too big for stata integer types
+        print(f"Column {column_name} is out of integer range; converting to string")
+        self.convert_int64_column_to_string(column_name)
+        return "string"
 
     def get_column_types(self):
         """
@@ -167,7 +186,21 @@ class ArrowConverter:
                 ),
                 "string",
             )
-        return column_types
+
+        # For the integer and category types, refine them to the stata type their values fit into
+        category_variables = [
+            col for col, type_ in column_types.items() if type_ == "category"
+        ]
+        integer_variables = [
+            col for col, type_ in column_types.items() if type_ == "int"
+        ]
+        for col in [*integer_variables, *category_variables]:
+            column_type = "category" if col in category_variables else "int"
+            column_range = self.get_range_for_column(col, column_type=column_type)
+            column_types[col] = self.get_stata_type_from_range(
+                *column_range, col, is_category=column_type == "category"
+            )
+        return column_types, category_variables
 
     def clean_names(self):
         """
@@ -231,7 +264,10 @@ class ArrowConverter:
         stata, so null replacements are deferred till later.
         """
         for column_name, column_type in self.column_types.items():
-            if column_type in ["date", "timestamp", "category"]:
+            if (
+                column_type in ["date", "timestamp"]
+                or column_name in self.category_variables
+            ):
                 # Skip dates/timestamps/category
                 # We replace these after conversion to stata dates in `load_data`
                 continue
@@ -269,11 +305,11 @@ class ArrowConverter:
         for varname, vartype in self.column_types.items():
             if vartype == "string":
                 sfi.Data.addVarStrL(varname)
-            elif vartype == "boolean":
+            elif vartype in ["boolean", "byte"]:
                 sfi.Data.addVarByte(varname)
             elif vartype == "int":
                 sfi.Data.addVarInt(varname)
-            elif vartype == "category":
+            elif vartype == "long":
                 sfi.Data.addVarLong(varname)
             elif vartype in ["float", "date", "timestamp"]:
                 sfi.Data.addVarFloat(varname)
@@ -332,11 +368,9 @@ class ArrowConverter:
             # get the values to load into stata
             values = []
             for i, varname in enumerate(self.column_names):
-                if self.column_types[varname] == "category":
+                if varname in self.category_variables:
                     # convert category data to a list of indices
-                    column_data = (
-                        batch.columns[i].dictionary_encode().indices.to_pylist()
-                    )
+                    column_data = batch.columns[i].indices.to_pylist()
                     # fill missing values with stata "extended missing"
                     column_data = [
                         val
