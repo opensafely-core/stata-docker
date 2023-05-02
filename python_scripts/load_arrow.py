@@ -42,6 +42,7 @@ class ArrowConverter:
         self.MISSING_VALUES = {
             "string": "",
             "boolean": 101,
+            "byte": 101,
             "int": 32741,
             "long": 2147483621,
             "date": stata_system_missing,
@@ -342,6 +343,29 @@ class ArrowConverter:
         for variable_name in self.column_names:
             sfi.Data.setVarLabel(variable_name, variable_name)
 
+    def replace_stata_missing_and_recast(self):
+        """
+        Null values are replace prior to loading into stata, with the sysmiss value
+        for that variable type. However, for byte, int and long types, this results
+        in stata converting the variable type to one that can hold the sysmiss value.
+        i.e. if we have a byte column which can take the values 1, 2, or None, it will
+        be converted to an int column in stata, with the values 1, 2, and 101.
+
+        After the data is loaded to stata, we replace any numeric missing values with stata's
+        missing notation ("."), and recast the column to the expected type.
+        """
+        # for byte/int/long variables, replace the missing value with stata missing and recast
+        # the variable to the type we expect it to be
+        for column_name, column_type in self.column_types.items():
+            if column_type not in ["boolean", "byte", "int", "long"]:
+                continue
+            column_type = "byte" if column_type == "boolean" else column_type
+            print(f"Finalising column {column_name} (type ({column_type})")
+            sfi.SFIToolkit.stata(
+                f"replace {column_name} = . if {column_name} == {self.MISSING_VALUES[column_type]}"
+            )
+            sfi.SFIToolkit.stata(f"recast {column_type} {column_name}")
+
     def load_data(self):
         self.make_vars()
         self.define_value_labels()
@@ -392,6 +416,7 @@ class ArrowConverter:
 
         self.apply_variable_labels()
         self.apply_value_labels()
+        self.replace_stata_missing_and_recast()
 
 
 def parse_args():
