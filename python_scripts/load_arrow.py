@@ -1,5 +1,6 @@
 import csv
 import sys
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import sfi
@@ -359,20 +360,37 @@ class ArrowConverter:
             )
             sfi.SFIToolkit.stata(f"recast {column_type} {column_name}")
 
+    def _convert_datetime_data(self, column_data, column_type):
+        """
+        Convert a list of python dates or datetimes to their stata numeric equivalent
+        - dates: days since 1960-1-1
+        - timestamps: milliseconds since 1960-1-1
+        """
+        missing_val = self.MISSING_VALUES[column_type]
+
+        def _convert_date_to_days_since(base, dt):
+            if dt is None:
+                return missing_val
+            return (dt - base).days
+
+        def _convert_ts_to_milliseconds_since(base, dt):
+            if dt is None:
+                return missing_val
+            if dt.tzinfo:
+                dt = dt - dt.utcoffset()
+            return (dt - base) / timedelta(milliseconds=1)
+
+        converters = {
+            "date": (date(1960, 1, 1), _convert_date_to_days_since),
+            "timestamp": (datetime(1960, 1, 1), _convert_ts_to_milliseconds_since),
+        }
+
+        base, conversion_func = converters[column_type]
+        return [conversion_func(base, val) for val in column_data]
+
     def load_data(self):
         self.make_vars()
         self.define_value_labels()
-
-        def _datetime_as_sif(python_datetime, column_name):
-            """
-            Convert a python datetime to stata format
-             - dates %td (number of days since 1960-01-01)
-             - timestamps %td (number of milliseconds since 1960-01-01)
-            """
-            format = "%td" if self.column_types[column_name] == "date" else "%tc"
-            if python_datetime is not None:
-                return sfi.Datetime.getSIF(python_datetime, format)
-            return self.MISSING_VALUES[self.column_types[column_name]]
 
         next_obs = 0
         for i, batch in enumerate(self.arrow_table.to_batches(self.max_chunksize)):
@@ -400,9 +418,9 @@ class ArrowConverter:
                 else:
                     column_data = batch.columns[i].to_pylist()
                     if self.column_types[varname] in ["date", "timestamp"]:
-                        column_data = [
-                            _datetime_as_sif(val, varname) for val in column_data
-                        ]
+                        column_data = self._convert_datetime_data(
+                            column_data, self.column_types[varname]
+                        )
                 values.append(column_data)
             next_obs += batch.num_rows
 
