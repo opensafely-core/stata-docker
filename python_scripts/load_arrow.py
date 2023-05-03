@@ -3,8 +3,9 @@ import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+import pyarrow
 import sfi
-from pyarrow import compute, feather, int8, string
+from pyarrow import RecordBatch, compute, int8, string
 from pyarrow.types import (
     is_boolean,
     is_date,
@@ -24,14 +25,9 @@ def main(filename, configfile=None, max_chunksize=64000):
 
 class ArrowConverter:
     def __init__(self, filename, configfile, max_chunksize):
-        # read the feather file into a table
-        print(f"Reading file {filename}")
-        self.arrow_table = feather.read_table(filename)
-
+        # Read config file if there is one, and identify aliases to use for column naming
         config = self.read_config(configfile)
         self.aliases = self.get_aliases_from_config(config)
-
-        self.max_chunksize = max_chunksize
 
         # stata has 27 missing values
         # https://www.stata.com/manuals/dmissingvalues.pdf
@@ -46,26 +42,18 @@ class ArrowConverter:
             "byte": 101,
             "int": 32741,
             "long": 2147483621,
-            "date": stata_system_missing,
+            "date": 2147483621,
             "timestamp": stata_system_missing,
             "float": stata_system_missing,
             "double": stata_system_missing,
         }
 
-        # Ensure that all variable names are valid Stata varnames
-        self.column_names = self.clean_names()
-
-        # Identify the column names and types, and which variables are category ones
-        self.column_types, self.category_variables = self.get_column_types()
-
-        # convert boolean columns to int8
-        self.convert_bool_to_int()
-
-        # Replace null values in original arrow table where possible at this stage
-        self.replace_missing_values()
-
-        # Generate the value label mappings for categorical variables
-        self.value_labels = self.get_categorical_encodings(self.category_variables)
+        # these will be set on the first batch reading
+        self.column_names = None
+        self.column_types = None
+        self.category_variables = None
+        self.value_labels = None
+        self.arrow_batches = self.iter_arrow_batches(filename)
 
     def read_config(self, configfile):
         """
@@ -110,31 +98,37 @@ class ArrowConverter:
             )
         return aliases
 
-    def convert_int64_column_to_string(self, column_name):
+    def iter_arrow_batches(self, filename):
+        """Read the arrow file in batches"""
+        with pyarrow.memory_map(str(filename), "rb") as f:
+            with pyarrow.ipc.open_file(f) as reader:
+                total_batches = reader.num_record_batches
+                for i in range(0, total_batches):
+                    yield reader.get_record_batch(i), i + 1, total_batches
+
+    def convert_int64_column_to_string(self, batch, column_name):
         """
         Stata can only deal with int8, int16, int32; if we have ints that require
         int64, they're likely to just be identifiers. We convert them to a literal
         string and let users deal with them later.
         """
-        converted = self.arrow_table[column_name].cast(string())
-        self._replace_column(column_name, converted)
+        converted = batch[column_name].cast(string())
+        return self._replace_column(batch, column_name, converted)
 
-    def get_range_for_column(self, column_name, column_type="int"):
+    def get_range_for_column(self, batch, column_name, column_type="int"):
         """
         Return the min and max value for a column from an arrow column
         """
         if column_type == "int":
-            col_range = compute.min_max(self.arrow_table[column_name]).as_py()
+            col_range = compute.min_max(batch[column_name]).as_py()
             return col_range["min"], col_range["max"]
 
         assert (
             column_type == "category"
         ), f"Can only get range for int or category types, got {column_type}"
-        return (0, len(self.arrow_table[column_name].chunks[0].dictionary))
+        return (0, len(batch[column_name].dictionary))
 
-    def get_stata_type_from_range(
-        self, min_val, max_val, column_name, is_category=False
-    ):
+    def get_stata_type_from_range(self, batch, min_val, max_val, column_name):
         """
         Identify the appropriate integer type from the range of values in this
         batch
@@ -142,25 +136,41 @@ class ArrowConverter:
         value is 27 less than the largest value for that type
         https://www.stata.com/manuals/dmissingvalues.pdf
         """
+        type_weights = {"byte": 0, "int": 1, "long": 2, "string": 3}
         range_to_stata_type = {
             (-127, 100): "byte",
             (-32_767, 32_740): "int",
             (-2_147_483_647, 2_147_483_620): "long",
         }
 
+        batch_type = None
         for int_range, stata_type in range_to_stata_type.items():
             if min_val >= int_range[0] and max_val <= int_range[1]:
-                return stata_type
+                batch_type = stata_type
+                break
 
-        # range is too big for stata integer types
-        print(f"Column {column_name} is out of integer range; converting to string")
-        self.convert_int64_column_to_string(column_name)
-        return "string"
+        if batch_type is None:
+            # range is too big for stata integer types
+            print(f"Column {column_name} is out of integer range; converting to string")
+            batch = self.convert_int64_column_to_string(batch, column_name)
+            batch_type = "string"
 
-    def get_column_types(self):
+        current_type = (
+            self.column_types[column_name] if self.column_types is not None else "byte"
+        )
+        if batch_type == current_type:
+            return batch, batch_type
+        # return the largest of the two possible types
+        return batch, max([current_type, batch_type], key=lambda x: type_weights[x])
+
+    def get_column_types(self, batch):
         """
-        Method to return the modal dtype across columns of the data frames
-        :return: A dictionary containing the modal type for each column
+        Method to find the types of each column of a record batch.
+        We need to do this for each batch to ensure that any integer variable are set to
+        the correct stata type based on the range of their values.
+        Set:
+          self.column_types - a dictionary containing the modal type for each column
+          self.category_variables - a list of category variables
         """
         column_test_mapping = {
             is_floating: "float",
@@ -170,9 +180,10 @@ class ArrowConverter:
             is_integer: "int",
             is_dictionary: "category",
         }
+
         column_types = {}
         for column_name in self.column_names:
-            column_metadata = self.arrow_table.schema.field(column_name)
+            column_metadata = batch.schema.field(column_name)
             column_types[column_name] = next(
                 (
                     col_type
@@ -183,31 +194,39 @@ class ArrowConverter:
             )
 
         # For the integer and category types, refine them to the stata type their values fit into
-        category_variables = [
-            col for col, type_ in column_types.items() if type_ == "category"
-        ]
+        if self.category_variables is None:
+            self.category_variables = [
+                col for col, type_ in column_types.items() if type_ == "category"
+            ]
         integer_variables = [
             col for col, type_ in column_types.items() if type_ == "int"
         ]
-        for col in [*integer_variables, *category_variables]:
-            column_type = "category" if col in category_variables else "int"
-            column_range = self.get_range_for_column(col, column_type=column_type)
-            column_types[col] = self.get_stata_type_from_range(
-                *column_range, col, is_category=column_type == "category"
+        for col in [*integer_variables, *self.category_variables]:
+            column_type = "category" if col in self.category_variables else "int"
+            column_range = self.get_range_for_column(
+                batch, col, column_type=column_type
             )
-        return column_types, category_variables
+            batch, column_type = self.get_stata_type_from_range(
+                batch, *column_range, col
+            )
+            column_types[col] = column_type
+        self.column_types = column_types
+        return batch
 
-    def clean_names(self):
+    def clean_names(self, batch):
         """
         Function to ensure all of the names of the variables in the table
         are valid Stata variable names.
-        If an aliases file has been provided, use it to rename the columns.
+        If an aliases file has been provided, record the column name mapping.
         """
-        # Creates a mapping from existing column names to names allowed by Stata
-        clean_column_names = []
+        if self.column_names is not None:
+            return batch
+
+        original_names = batch.schema.names
         # Keep a note of names that are too long so we can report those back to the user.
         too_long_names = []
-        for varname in self.arrow_table.column_names:
+        self.column_names = []
+        for varname in batch.schema.names:
             if len(varname) > 32 and varname not in self.aliases:
                 too_long_names.append(varname)
                 continue
@@ -218,7 +237,7 @@ class ArrowConverter:
             )
             if cleaned_name != varname:
                 print(f"{varname} aliased to {cleaned_name}")
-            clean_column_names.append(cleaned_name)
+            self.column_names.append(cleaned_name)
 
         if too_long_names:
             raise ValueError(
@@ -226,90 +245,146 @@ class ArrowConverter:
                 f"To fix this, rename variables in arrow file to <32 characters.\n"
                 f"Alternatively, a CSV file of original to alias names can be provided."
             )
-        self.arrow_table = self.arrow_table.rename_columns(clean_column_names)
-        return self.arrow_table.column_names
 
-    def convert_bool_to_int(self):
+        if original_names != self.column_names:
+            batch = RecordBatch.from_arrays(batch.columns, names=self.column_names)
+        return batch
+
+    def convert_bool_to_int(self, batch):
         """
         Stata has no boolean types and encodes bools as 0/1
         Convert any boolean columns to int8
         """
         for column_name, column_type in self.column_types.items():
             if column_type == "boolean":
-                converted = self.arrow_table[column_name].cast(int8())
-                self._replace_column(column_name, converted)
+                converted = batch[column_name].cast(int8())
+                batch = self._replace_column(batch, column_name, converted)
+        return batch
 
-    def _replace_column(self, column_name, converted):
+    def convert_date_and_timestamp_columns(self, batch):
+        for column_name, column_type in self.column_types.items():
+            if column_type in ["date", "timestamp"]:
+                converted = batch[column_name].to_pylist()
+                converted = self._convert_datetime_data(converted, column_type)
+                batch = self._replace_column(batch, column_name, converted)
+        return batch
+
+    def _convert_datetime_data(self, column_data, column_type):
         """
-        Replace a column the arrow table to another type
+        Convert a list of python dates or datetimes to their stata numeric equivalent
+        - dates: days since 1960-1-1
+        - timestamps: milliseconds since 1960-1-1
+        """
+
+        def _convert_date_to_days_since(base, dt):
+            if dt is not None:
+                return (dt - base).days
+
+        def _convert_ts_to_milliseconds_since(base, dt):
+            if dt is None:
+                return
+            if dt.tzinfo:
+                dt = dt - dt.utcoffset()
+            return (dt - base) / timedelta(milliseconds=1)
+
+        converters = {
+            "date": (date(1960, 1, 1), _convert_date_to_days_since),
+            "timestamp": (datetime(1960, 1, 1), _convert_ts_to_milliseconds_since),
+        }
+
+        base, conversion_func = converters[column_type]
+        return [conversion_func(base, val) for val in column_data]
+
+    def _replace_column(self, batch, column_name, converted):
+        """
+        Replace a column in the baych with another type
         Columns are immutable, so first find the index of the original column,
         remove it, and replace it with the new column at the same index and with the
         same name.
+        Return a new batch with the replaced column
         """
         col_name_index = self.column_names.index(column_name)
-        self.arrow_table = self.arrow_table.remove_column(col_name_index)
-        self.arrow_table = self.arrow_table.add_column(
-            col_name_index, column_name, converted
-        )
+        arrays = [batch[column_name] for column_name in self.column_names]
+        arrays[col_name_index] = converted
+        return RecordBatch.from_arrays(arrays, names=self.column_names)
 
-    def replace_missing_values(self):
+    def replace_missing_values(self, batch):
         """
-        Replace null values in the arrow table with the value stata needs.
-        Dates/timestamps/category require additional conversion before loading to
-        stata, so null replacements are deferred till later.
+        Replace null values in the batch with the value stata needs.
+        Note that we lose the categorical information in the batch,
+        but that's OK, because we do this last before loading into
+        stata, and we've already identified any categorical label info
+        that needs to be applied.
         """
         for column_name, column_type in self.column_types.items():
-            if (
-                column_type in ["date", "timestamp"]
-                or column_name in self.category_variables
-            ):
-                # Skip dates/timestamps/category
-                # We replace these after conversion to stata dates in `load_data`
-                continue
             null_value = self.MISSING_VALUES[column_type]
-            converted = self.arrow_table[column_name].fill_null(null_value)
-            col_name_index = self.column_names.index(column_name)
-            self.arrow_table = self.arrow_table.remove_column(col_name_index)
-            self.arrow_table = self.arrow_table.add_column(
-                col_name_index, column_name, converted
-            )
+            column_data = batch[column_name]
+            if column_name in self.category_variables:
+                # convert category data to a list of indices
+                column_data = column_data.indices
+            converted = column_data.fill_null(null_value)
+            batch = self._replace_column(batch, column_name, converted)
+        return batch
 
-    def get_categorical_encodings(self, varnames):
+    def get_categorical_encodings(self, batch):
         """
         Retrieve a mapping of labels: values for categorical vars.
         Returns a dict where the variable names are the keys and the value
         is a dictionary consisting of label : value key/value pairs
         """
-        value_labels = {}
-        for varname in varnames:
-            first_chunk = self.arrow_table[varname].chunks[0]
+        if self.value_labels is not None:
+            return
+        self.value_labels = {}
+        for varname in self.category_variables:
             # Get the unique values for this variable and numeric mapping
             value_map = {
-                str(value): idx for idx, value in enumerate(first_chunk.dictionary)
+                str(value): idx for idx, value in enumerate(batch[varname].dictionary)
             }
-            value_labels[varname] = value_map
+            self.value_labels[varname] = value_map
 
-        return value_labels
-
-    def make_vars(self):
+    def make_vars(self, pre_processed_column_types):
         """
         Function used to create the Stata variables in memory.
         """
-        # Loop over the variable name / variable type mappings and add
-        # variables with the appropriate typing based on the vartype
-        for varname, vartype in self.column_types.items():
-            if vartype == "string":
-                sfi.Data.addVarStrL(varname)
-            elif vartype in ["boolean", "byte"]:
-                sfi.Data.addVarByte(varname)
-            elif vartype == "int":
-                sfi.Data.addVarInt(varname)
-            elif vartype in ["long", "date"]:
-                sfi.Data.addVarLong(varname)
-            elif vartype in ["float", "timestamp"]:
-                sfi.Data.addVarFloat(varname)
-            else:
-                assert False, f"Unhandled type: {vartype}"
+        if not pre_processed_column_types:
+            # This is the first batch
+            # Loop over the variable name / variable type mappings and add
+            # variables with the appropriate typing based on the vartype
+            for varname, vartype in self.column_types.items():
+                if vartype == "string":
+                    sfi.Data.addVarStrL(varname)
+                elif vartype in ["boolean", "byte"]:
+                    sfi.Data.addVarByte(varname)
+                elif vartype == "int":
+                    sfi.Data.addVarInt(varname)
+                elif vartype in ["long", "date"]:
+                    sfi.Data.addVarLong(varname)
+                elif vartype in ["float", "timestamp"]:
+                    sfi.Data.addVarFloat(varname)
+                else:
+                    assert False, f"Unhandled type: {vartype}"
+        else:
+            # If any columns have changed required type when we process a
+            # subsequent batch, recast the existing stata column
+            column_type_mappings = {"boolean": "byte", "date": "long"}
+            changed_cols = {
+                col: col_type
+                for col, col_type in self.column_types.items()
+                if self.column_types[col] != pre_processed_column_types[col]
+            }
+            for changed_col, changed_type in changed_cols.items():
+                print(f"Converting {changed_cols}")
+                if changed_type == "string":
+                    # If the variable has changed in a subsequent batch to string type, it
+                    # means it was previously considered integer type and is now too big to
+                    # fit into `long`. recast doesn't work in this case; we need to change it
+                    # to a new string column, drop the old column and rename it.
+                    sfi.SFIToolkit.stata(f"tostring {changed_col}, gen({changed_col}1)")
+                    sfi.Data.dropVar(changed_col)
+                    sfi.SFIToolkit.stata(f"rename {changed_col}1 {changed_col}")
+                else:
+                    cast_to = column_type_mappings.get(changed_type, changed_type)
+                    sfi.SFIToolkit.stata(f"recast {cast_to} {changed_col}")
 
     def define_value_labels(self):
         """
@@ -350,85 +425,73 @@ class ArrowConverter:
         """
         # for byte/int/long variables, replace the missing value with stata missing and recast
         # the variable to the type we expect it to be
+        column_type_mappings = {"boolean": "byte", "date": "long"}
         for column_name, column_type in self.column_types.items():
-            if column_type not in ["boolean", "byte", "int", "long"]:
+            if column_type not in ["boolean", "byte", "int", "long", "date"]:
                 continue
-            column_type = "byte" if column_type == "boolean" else column_type
+            column_type = column_type_mappings.get(column_type, column_type)
             print(f"Finalising column {column_name} (type ({column_type})")
             sfi.SFIToolkit.stata(
                 f"replace {column_name} = . if {column_name} == {self.MISSING_VALUES[column_type]}"
             )
             sfi.SFIToolkit.stata(f"recast {column_type} {column_name}")
 
-    def _convert_datetime_data(self, column_data, column_type):
+    def process_batch(self, batch):
         """
-        Convert a list of python dates or datetimes to their stata numeric equivalent
-        - dates: days since 1960-1-1
-        - timestamps: milliseconds since 1960-1-1
+        Process a single batch.
         """
-        missing_val = self.MISSING_VALUES[column_type]
 
-        def _convert_date_to_days_since(base, dt):
-            if dt is None:
-                return missing_val
-            return (dt - base).days
+        if self.column_types is not None:
+            pre_processing_column_types = {**self.column_types}
+        else:
+            pre_processing_column_types = {}
 
-        def _convert_ts_to_milliseconds_since(base, dt):
-            if dt is None:
-                return missing_val
-            if dt.tzinfo:
-                dt = dt - dt.utcoffset()
-            return (dt - base) / timedelta(milliseconds=1)
+        # Ensure that all variable names are valid Stata varnames
+        batch = self.clean_names(batch)
 
-        converters = {
-            "date": (date(1960, 1, 1), _convert_date_to_days_since),
-            "timestamp": (datetime(1960, 1, 1), _convert_ts_to_milliseconds_since),
-        }
+        # Identify the column names and types, and which variables are category ones
+        batch = self.get_column_types(batch)
 
-        base, conversion_func = converters[column_type]
-        return [conversion_func(base, val) for val in column_data]
+        # convert boolean columns to int8
+        batch = self.convert_bool_to_int(batch)
+
+        # convert dates/timestamps to their relevant numeric type
+        batch = self.convert_date_and_timestamp_columns(batch)
+        # Generate the value label mappings for categorical variables
+        self.get_categorical_encodings(batch)
+
+        # Replace null values in each column.  Note this must be done last, as replacing
+        # the categorical nulls loses the category info from the batch
+        batch = self.replace_missing_values(batch)
+
+        return batch, pre_processing_column_types
 
     def load_data(self):
-        self.make_vars()
-        self.define_value_labels()
-
         next_obs = 0
-        for i, batch in enumerate(self.arrow_table.to_batches(self.max_chunksize)):
+        for batch, batch_num, total in self.arrow_batches:
+            print(f"Reading batch {batch_num} of {total}")
+            batch, pre_processed_column_types = self.process_batch(batch)
+            # make variables
+            self.make_vars(pre_processed_column_types)
+
             # add observations
             sfi.Data.addObs(batch.num_rows)
             # find the indices of the observations for this batch
-            # Note that we need to keep track of which observation we're processing next
-            # and use that for identifying which observations this batch is for, because
-            # the batch size is not always exactly self.max_chunksize
             batch_observations = range(next_obs, next_obs + batch.num_rows)
 
             # get the values to load into stata
             values = []
-            for i, varname in enumerate(self.column_names):
-                if varname in self.category_variables:
-                    # convert category data to a list of indices
-                    column_data = batch.columns[i].indices.to_pylist()
-                    # fill missing values with stata "extended missing"
-                    column_data = [
-                        val
-                        if val is not None
-                        else self.MISSING_VALUES[self.column_types[varname]]
-                        for val in column_data
-                    ]
-                else:
-                    column_data = batch.columns[i].to_pylist()
-                    if self.column_types[varname] in ["date", "timestamp"]:
-                        column_data = self._convert_datetime_data(
-                            column_data, self.column_types[varname]
-                        )
+            for varname in self.column_names:
+                column_data = batch[varname].to_pylist()
                 values.append(column_data)
+
             next_obs += batch.num_rows
 
             # store values at specified observation indices
             sfi.Data.store(
                 var=self.column_names, obs=batch_observations, val=zip(*values)
             )
-
+        self.define_value_labels()
         self.apply_variable_labels()
         self.apply_value_labels()
         self.replace_stata_missing_and_recast()
