@@ -16,15 +16,13 @@ from pyarrow.types import (
 )
 
 
-def main(filename, configfile=None, max_chunksize=64000):
-    # max_chunksize is set, somewhat arbitrarily, to the same default value that
-    # ehrQL uses to write arrow files.
-    converter = ArrowConverter(filename, configfile, max_chunksize)
+def main(filename, configfile=None):
+    converter = ArrowConverter(filename, configfile)
     converter.load_data()
 
 
 class ArrowConverter:
-    def __init__(self, filename, configfile, max_chunksize):
+    def __init__(self, filename, configfile):
         # Read config file if there is one, and identify aliases to use for column naming
         config = self.read_config(configfile)
         self.aliases = self.get_aliases_from_config(config)
@@ -498,15 +496,13 @@ class ArrowConverter:
 
 
 def parse_args():
-    # The stata `arrowload` command always passes 3 positional arguments
+    # The stata `arrowload` command always passes 2 positional arguments
     # The first argument is the arrow filename
     args = dict(filename=sys.argv[1])
     # If no config CSV was provided, the string "none" will be the second arg, and we
     # can ignore it
     if sys.argv[2] != "none":
         args.update(configfile=sys.argv[2])
-    # Finally the max_chunksize; will be a user-specified value or the default 64000
-    args.update(max_chunksize=int(sys.argv[3]))
     return args
 
 

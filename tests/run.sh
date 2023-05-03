@@ -83,7 +83,7 @@ assert-content "custom command called" "tests/custom.log" "custom command called
 
 cp tests/fixtures/*.arrow tests/output/
 # Load the arrow file; contains:
-# 1000 variables, loaded in batches of 600
+# 1000 variables
 # - date vars: `date` has no nulls, `died_on`` includes nulls
 # - boolean: `flag`
 # - int: `age`, `patient_id` (int64 in feather file, int in stata)
