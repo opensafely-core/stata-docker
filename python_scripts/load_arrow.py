@@ -1,6 +1,6 @@
 import csv
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pyarrow
@@ -285,9 +285,16 @@ class ArrowConverter:
                 dt = dt - dt.utcoffset()
             return (dt - base) / timedelta(milliseconds=1)
 
+        def _get_tzinfo():
+            if column_type == "timestamp" and column_data[0].tzinfo:
+                return timezone.utc
+
         converters = {
             "date": (date(1960, 1, 1), _convert_date_to_days_since),
-            "timestamp": (datetime(1960, 1, 1), _convert_ts_to_milliseconds_since),
+            "timestamp": (
+                datetime(1960, 1, 1, tzinfo=_get_tzinfo()),
+                _convert_ts_to_milliseconds_since,
+            ),
         }
 
         base, conversion_func = converters[column_type]
@@ -357,7 +364,9 @@ class ArrowConverter:
                     sfi.Data.addVarInt(varname)
                 elif vartype in ["long", "date"]:
                     sfi.Data.addVarLong(varname)
-                elif vartype in ["float", "timestamp"]:
+                elif vartype == "timestamp":
+                    sfi.Data.addVarDouble(varname)
+                elif vartype == "float":
                     sfi.Data.addVarFloat(varname)
                 else:
                     assert False, f"Unhandled type: {vartype}"
