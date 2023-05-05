@@ -369,7 +369,7 @@ class ArrowConverter:
             }
             self.value_labels[varname] = value_map
 
-    def make_vars(self, pre_processed_column_types):
+    def make_vars(self, pre_processed_column_types, batch):
         """
         Function used to create the Stata variables in memory.
         """
@@ -379,7 +379,8 @@ class ArrowConverter:
             # variables with the appropriate typing based on the vartype
             for varname, vartype in self.column_types.items():
                 if vartype == "string":
-                    sfi.Data.addVarStrL(varname)
+                    max_length = max(len(val.as_py()) for (val) in batch[varname])
+                    sfi.Data.addVarStr(varname, length=max_length)
                 elif vartype in ["boolean", "byte"]:
                     sfi.Data.addVarByte(varname)
                 elif vartype == "int":
@@ -502,7 +503,7 @@ class ArrowConverter:
             print(f"Reading batch {batch_num} of {total}")
             batch, pre_processed_column_types = self.process_batch(batch)
             # make variables
-            self.make_vars(pre_processed_column_types)
+            self.make_vars(pre_processed_column_types, batch)
 
             # add observations
             sfi.Data.addObs(batch.num_rows)
