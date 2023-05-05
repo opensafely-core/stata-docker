@@ -1,6 +1,6 @@
 import csv
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 
 import pyarrow
@@ -262,43 +262,65 @@ class ArrowConverter:
     def convert_date_and_timestamp_columns(self, batch):
         for column_name, column_type in self.column_types.items():
             if column_type in ["date", "timestamp"]:
-                converted = batch[column_name].to_pylist()
-                converted = self._convert_datetime_data(converted, column_type)
+                if column_type == "timestamp":
+                    timestamp_units = batch[column_name].type.unit
+                else:
+                    timestamp_units = None
+                converted = self._convert_datetime_data(
+                    batch[column_name], column_type, timestamp_units
+                )
                 batch = self._replace_column(batch, column_name, converted)
         return batch
 
-    def _convert_datetime_data(self, column_data, column_type):
+    def _convert_datetime_data(self, column_data, column_type, timestamp_units=None):
         """
-        Convert a list of python dates or datetimes to their stata numeric equivalent
+        Convert a list of pyarrow dates or timestamps to their stata numeric equivalent
+        Pyarrow dates are stored as days since 1970-1-1
+        Pyarrow timestamps are stored as time since 1970-1-1, in seconds, milliseconds,
+        microseconds or nanoseconds
+        Stata stores dates/timestamps using 1960-1-1
         - dates: days since 1960-1-1
         - timestamps: milliseconds since 1960-1-1
         """
+        epoch_base_timedelta = datetime(1970, 1, 1) - datetime(1960, 1, 1)
+        date_epoch_modifier = epoch_base_timedelta.days
 
-        def _convert_date_to_days_since(base, dt):
-            if dt is not None:
-                return (dt - base).days
+        # tuple of multipliers for each possible pyarrow timestamp unit needed to convert:
+        # 1) seconds to pyarrow timestamp units
+        # 2) pyarrow timestamp units to milliseconds
+        ts_units_multipliers = {
+            None: (1, 1),
+            "s": (1, 1000),
+            "ms": (1000, 1),
+            "us": (1_000_000, 0.001),
+            "ns": (1_000_000_000, 0.000001),
+        }
+        # this is the amount we need to add to a pyarrow timestamp value to
+        # get its value since the stata epoch in the ORIGINAL units
+        ts_epoch_modifier = (
+            epoch_base_timedelta.total_seconds()
+            * ts_units_multipliers[timestamp_units][0]
+        )
+        # this is what we multiply the original units by to get the time since epoch in MILLISECONDS
+        ts_units_to_ms = ts_units_multipliers[timestamp_units][1]
 
-        def _convert_ts_to_milliseconds_since(base, dt):
-            if dt is None:
-                return
-            if dt.tzinfo:
-                dt = dt - dt.utcoffset()
-            return (dt - base) / timedelta(milliseconds=1)
+        def _convert_date_to_days_since(dt):
+            if dt.value is not None:
+                days_since_pyarrow_epoch = dt.value
+                return days_since_pyarrow_epoch + date_epoch_modifier
 
-        def _get_tzinfo():
-            if column_type == "timestamp" and column_data[0].tzinfo:
-                return timezone.utc
+        def _convert_ts_to_milliseconds_since(dt):
+            if dt.value is not None:
+                units_since_pyarrow_epoch = dt.value
+                return (units_since_pyarrow_epoch + ts_epoch_modifier) * ts_units_to_ms
 
         converters = {
-            "date": (date(1960, 1, 1), _convert_date_to_days_since),
-            "timestamp": (
-                datetime(1960, 1, 1, tzinfo=_get_tzinfo()),
-                _convert_ts_to_milliseconds_since,
-            ),
+            "date": _convert_date_to_days_since,
+            "timestamp": _convert_ts_to_milliseconds_since,
         }
 
-        base, conversion_func = converters[column_type]
-        return [conversion_func(base, val) for val in column_data]
+        conversion_func = converters[column_type]
+        return [conversion_func(val) for val in column_data]
 
     def _replace_column(self, batch, column_name, converted):
         """
@@ -464,6 +486,7 @@ class ArrowConverter:
 
         # convert dates/timestamps to their relevant numeric type
         batch = self.convert_date_and_timestamp_columns(batch)
+
         # Generate the value label mappings for categorical variables
         self.get_categorical_encodings(batch)
 
