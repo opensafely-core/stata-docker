@@ -83,27 +83,83 @@ assert-content "custom command called" "tests/custom.log" "custom command called
 
 cp tests/fixtures/*.arrow tests/output/
 # Load the arrow file; contains:
-# 1000 variables
-# - date vars: `date` has no nulls, `died_on`` includes nulls
-# - boolean: `flag`
-# - int: `age`, `patient_id` (int64 in feather file, int in stata)
-# - categorical: sex (coded M/F as 0/1, no nulls), region (includes nulls)
-# - num_val: int64 in feather file (values around 50,000; < int32 max), converted to long in stata
-# - big_val: int64 in feather file (values > int32 max), converted to string
+# 1000 variables, processed as a single batch
+# b1: boolean
+# d1: date, d1a: date with nulls
+# t1: timestamp, t1a: timestamp with nulls
+# i1, i2, i3: integers fitting byte/int/long vars in stata
+# i1a, i2a, i3a: as above, with nulls
+# i4: int64 var, too big for stata int, converted to string
+# i4a: as i4, with nulls
+# f1, f1a: float, with and without nulls
+# s1, s1a: i4/i4a values, already converted to string before loading
+# c1, c1a: category (A, B, C, D), with and without nulls
 try "load arrow file" analysis/arrowload/arrowload.do
-expected_var_names="patient_id    date   died_on   flag   age   sex   region   num_val"
-expected_values_row1="1   10562         .      1    34     .     East     50034"
-expected_formatted_values_row1="1   01dec1988         .      1    34     .     East     50034"
-expected_formatted_values_row4="4   01dec2007         .      0    15     .   London     50015"
 assert-content "Contains expected observations" "$output" "obs:         1,000"
-assert-content "Contains expected int variable" "$output" "age             int"
-assert-content "Contains expected long variable" "$output" "num_val         long"
-assert-content "Contains expected string variable" "$output" "big_val         strL"
-assert-content "Contains expected variable names" "$output" "$expected_var_names"
-assert-content "Contains expected values (row 1)" "$output" "$expected_values_row1"
-assert-content "Contains expected value for big_val (row 1)" "$output" "3147483655"
-assert-content "Contains expected formatted values (row 1)" "$output" "$expected_formatted_values_row1"
-assert-content "Contains expected formatted values (row 4)" "$output" "$expected_formatted_values_row4"
+assert-content "Contains expected batches (1)" "$output" "Reading batch 1 of 1"
+assert-content "Contains expected variable b1" "$output" "b1              byte"
+assert-content "Contains expected variable d1" "$output" "d1              long"
+assert-content "Contains expected variable d1a" "$output" "d1a             long"
+assert-content "Contains expected variable t1" "$output" "t1              double"
+assert-content "Contains expected variable t1a" "$output" "t1a             double"
+assert-content "Contains expected variable i1" "$output" "i1              byte"
+assert-content "Contains expected variable i1a" "$output" "i1a             byte"
+assert-content "Contains expected variable i2" "$output" "i2              int"
+assert-content "Contains expected variable i2a" "$output" "i2a             int"
+assert-content "Contains expected variable i3" "$output" "i3              long"
+assert-content "Contains expected variable i3a" "$output" "i3a             long"
+assert-content "Contains expected variable i4" "$output" "i4              str11"
+assert-content "Contains expected variable i4a" "$output" "i4a             str11"
+assert-content "Contains expected variable f1" "$output" "f1              float"
+assert-content "Contains expected variablef1a" "$output" "f1a             float"
+assert-content "Contains expected variable s1" "$output" "s1              str11"
+assert-content "Contains expected variable s1a" "$output" "s1a             str11"
+assert-content "Contains expected variable c1" "$output" "c1              byte"
+assert-content "Contains expected variable c1a" "$output" "c1a             byte"
+
+expected_b1_c1_c1a_row1="1.    1    A     A"
+expected_b1_c1_c1a_row2="2.    1    A     ."
+expected_b1_c1_c1a_row1000="1000.    0    C     C"
+assert-content "Contains expected bool/category values (row 1)" "$output" "$expected_b1_c1_c1a_row1"
+assert-content "Contains expected bool/category values (row 2)" "$output" "$expected_b1_c1_c1a_row2"
+assert-content "Contains expected bool/category values (row 1000)" "$output" "$expected_b1_c1_c1a_row1000"
+
+expected_date_ts_row1="1.   01oct2023   01oct2023   01oct2023 10:30:00   01oct2023 10:30:00"
+expected_date_ts_row2="2.   01oct2023           .   01oct2023 10:30:00                    ."
+expected_date_ts_row1000="1000.   01dec2023   01dec2023   01oct2023 22:30:00   01oct2023 22:30:00"
+assert-content "Contains expected date/ts values (row 1)" "$output" "$expected_date_ts_row1"
+assert-content "Contains expected date/ts values (row 2)" "$output" "$expected_date_ts_row2"
+assert-content "Contains expected date/ts values (row 1000)" "$output" "$expected_date_ts_row1000"
+
+expected_integer_row1="1.   10    10   2000   2000   100000   100000"
+expected_integer_row2="2.   10     .   2000      .   100000        ."
+expected_integer_row1000="1000.   -12   -12   -350   -350   -200000   -200000"
+assert-content "Contains expected byte/int/long values (row 1)" "$output" "$expected_integer_row1"
+assert-content "Contains expected byte/int/long values (row 2)" "$output" "$expected_integer_row2"
+assert-content "Contains expected byte/int/long values (row 1000)" "$output" "$expected_integer_row1000"
+
+expected_str_row1="1.   2500000000   2500000000   2500000000   2500000000"
+expected_str_row2="2.   2500000000                2500000000             "
+expected_str_row1000="1000.   -2700000000   -2700000000   -2700000000   -2700000000"
+assert-content "Contains expected string values (row 1)" "$output" "$expected_str_row1"
+assert-content "Contains expected string values (row 2)" "$output" "$expected_str_row2"
+assert-content "Contains expected string values (row 1000)" "$output" "$expected_str_row1000"
+
+# Load the big arrow file; contains:
+# 1,000,000 observations variables, processed as two batches
+# all the same variables as before
+try "load arrow file" analysis/arrowload/arrowload-batches.do
+assert-content "Contains expected observations" "$output" "obs:       100,000"
+assert-content "Contains expected batches (2)" "$output" "Reading batch 1 of 2"
+
+# just check the types of the integer types; test data is set up so that the
+# first batch contains all byte-sized ints; vars are re-cast on the second batch
+assert-content "Contains expected variable i1" "$output" "i1              byte"
+assert-content "Contains expected variable i2" "$output" "i2              int"
+assert-content "Contains expected variable i3" "$output" "i3              long"
+# the i4 var is still cast to str11, although in the first batch it would be initially
+# created as byte
+assert-content "Contains expected variable i4" "$output" "i4              str11"
 
 fail "load arrow file with too-long names" analysis/arrowload/arrowload-too-long.do
 assert-content "Invalid variable name error in output" "$output" "Invalid variable names found"
