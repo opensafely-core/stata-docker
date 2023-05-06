@@ -160,6 +160,9 @@ assert-content "Contains expected variable i3" "$output" "i3              long"
 # the i4 var is still cast to str11, although in the first batch it would be initially
 # created as byte
 assert-content "Contains expected variable i4" "$output" "i4              str11"
+# ensure that nulls for re-cast types are still treated appropriately
+expected_integer_row2_nulls="2.   10     .   15     .   15     ."
+assert-content "Contains expected byte/int/long null values (row 2)" "$output" "$expected_integer_row2_nulls"
 
 fail "load arrow file with too-long names" analysis/arrowload/arrowload-too-long.do
 assert-content "Invalid variable name error in output" "$output" "Invalid variable names found"

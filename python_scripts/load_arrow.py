@@ -453,6 +453,14 @@ class ArrowConverter:
 
         After the data is loaded to stata, we replace any numeric missing values with stata's
         missing notation ("."), and recast the column to the expected type.
+
+        We need to do this for each batch, so that nulls from the first batch are treated
+        appropriately if the column is re-cast in a second batch. e.g.
+        Batch 1 contains a variable x with byte sized numbers and a null; the null is replaced
+        with the missing value 101; the variable is created as `byte` type
+        Batch 2 contains int sized numbers for variable x; the variable is recast to `int`. If the
+        missing value 101 from Batch 1 hasn't already been replaced with its stata null
+        value, it will become the non-missing integer 101 when the column is re-cast to `int` type.
         """
         # for byte/int/long variables, replace the missing value with stata missing and recast
         # the variable to the type we expect it to be
@@ -523,10 +531,11 @@ class ArrowConverter:
             sfi.Data.store(
                 var=self.column_names, obs=batch_observations, val=zip(*values)
             )
+            self.replace_stata_missing_and_recast()
+
         self.define_value_labels()
         self.apply_variable_labels()
         self.apply_value_labels()
-        self.replace_stata_missing_and_recast()
 
 
 def parse_args():
