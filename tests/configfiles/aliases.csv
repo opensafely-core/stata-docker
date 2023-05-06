@@ -1,2 +1,4 @@
 original_column,aliased_column
 variable_with_a_name_that_is_too_long_for_stata,aliased_name
+s1,aliased_s1
+i3a,aliased_i3a

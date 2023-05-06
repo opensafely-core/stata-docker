@@ -178,4 +178,8 @@ assert-content "Warning in output" "$output" "WARNING: No data found in configfi
 try "load arrow file with no alias headers in config file (multiline)" analysis/arrowload/arrowload-no-aliases-headers-2.do
 assert-content "Warning in output" "$output" "WARNING: file does not contain expected column headers for aliases"
 
+try "load arrow file with batches and aliases" analysis/arrowload/arrowload-batches-aliased.do
+assert-content "Contains expected aliased_i3a variable" "$output" "aliased_i3a     long"
+assert-content "Contains expected aliased_s1 variable" "$output" "aliased_s1      str11"
+
 exit $error

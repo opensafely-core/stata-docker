@@ -217,33 +217,34 @@ class ArrowConverter:
         are valid Stata variable names.
         If an aliases file has been provided, record the column name mapping.
         """
-        if self.column_names is not None:
-            return batch
-
         original_names = batch.schema.names
-        # Keep a note of names that are too long so we can report those back to the user.
-        too_long_names = []
-        self.column_names = []
-        for varname in batch.schema.names:
-            if len(varname) > 32 and varname not in self.aliases:
-                too_long_names.append(varname)
-                continue
-            # Get the aliases name, if one exists, and run it through the sfitoolkit method to make
-            # sure it's valid for stata
-            cleaned_name = sfi.SFIToolkit.strToName(
-                self.aliases.get(varname, varname), prefix=False
-            )
-            if cleaned_name != varname:
-                print(f"{varname} aliased to {cleaned_name}")
-            self.column_names.append(cleaned_name)
+        if self.column_names is None:
+            # This is the first batch; identify any provided aliases and ensure variable names
+            # are valid for stata
+            # Keep a note of names that are too long so we can report those back to the user.
+            too_long_names = []
+            self.column_names = []
+            for varname in batch.schema.names:
+                if len(varname) > 32 and varname not in self.aliases:
+                    too_long_names.append(varname)
+                    continue
+                # Get the aliases name, if one exists, and run it through the sfitoolkit method to make
+                # sure it's valid for stata
+                cleaned_name = sfi.SFIToolkit.strToName(
+                    self.aliases.get(varname, varname), prefix=False
+                )
+                if cleaned_name != varname:
+                    print(f"{varname} aliased to {cleaned_name}")
+                self.column_names.append(cleaned_name)
 
-        if too_long_names:
-            raise ValueError(
-                f"Invalid variable names found ({','.join(too_long_names)})\n"
-                f"To fix this, rename variables in arrow file to <32 characters.\n"
-                f"Alternatively, a CSV file of original to alias names can be provided."
-            )
+            if too_long_names:
+                raise ValueError(
+                    f"Invalid variable names found ({','.join(too_long_names)})\n"
+                    f"To fix this, rename variables in arrow file to <32 characters.\n"
+                    f"Alternatively, a CSV file of original to alias names can be provided."
+                )
 
+        # Generate a new batch with the cleaned/aliased column names.
         if original_names != self.column_names:
             batch = RecordBatch.from_arrays(batch.columns, names=self.column_names)
         return batch
