@@ -325,7 +325,7 @@ class ArrowConverter:
 
     def _replace_column(self, batch, column_name, converted):
         """
-        Replace a column in the baych with another type
+        Replace a column in the batch with another type
         Columns are immutable, so first find the index of the original column,
         remove it, and replace it with the new column at the same index and with the
         same name.
