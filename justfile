@@ -125,8 +125,8 @@ fix: devenv
 build: _env
     docker-compose build --pull stata-mp
 
-test: _env
-	./tests/run.sh stata-mp
+test *args: devenv
+    $BIN/pytest {{ args }}
 
 # docker leaves files around as root
 clean-logs:
