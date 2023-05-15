@@ -5,17 +5,36 @@ on:
 env:
   IMAGE_NAME: stata-mp
   STATA_LICENSE: ${{ secrets.STATA_LICENSE }}
+
 jobs:
-  tests:
-    runs-on: ubuntu-20.04
+
+  check:
+    runs-on: ubuntu-latest
+
     steps:
-    - name: Checkout
-      uses: actions/checkout@master
-    - name: install tools
-      run: sudo apt install --yes shellcheck
-    - name: Build image
-      run: make build
-    - name: Lint
-      run: make lint
-    - name: Run tests
-      run: make test
+      - uses: actions/checkout@v3
+      - uses: opensafely-core/setup-action@v1
+        with:
+          install-just: true
+          python-version: "3.11"
+          cache-dependency-path: "python-requirements*.txt"
+
+      - name: Check
+        run: just check
+
+  tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: opensafely-core/setup-action@v1
+        with:
+          install-just: true
+          python-version: "3.11"
+          cache-dependency-path: "python-requirements*.txt"
+
+      - name: Build image
+        run: just build
+
+      - name: Run tests
+        run: just test

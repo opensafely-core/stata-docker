@@ -25,6 +25,7 @@ Comes with the following stata libraries/commands installed:
   - gzsave: https://ideas.repec.org/c/boc/bocode/s446701.html
   - safetab: ?
   - safecount: ?
+  - arrowload: ?
 
 If you require extra stata libraries, you can add them to a `./libraries`
 directory in your study, and they will be available for you to use.
@@ -71,4 +72,3 @@ The process above uses the current stata-mp docker image to run stata's
 `stinit` process which can validate the license details.  This script is
 interactive, so we use the `expect` tool to provide it the input it needs (see
 `scripts/stinit.exp`).
-
