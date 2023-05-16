@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -8,6 +9,17 @@ import pytest
 
 TESTS_PATH = Path(__file__).parent
 IMAGE = "stata-mp"
+
+
+RE_WHITESPACE = re.compile(r"\s+")
+
+
+def sanitize(string):
+    """
+    Replace all whitespaces in a string with single whitespace, to make asserting
+    content more robust
+    """
+    return RE_WHITESPACE.sub(" ", string).strip()
 
 
 @pytest.fixture(autouse=True)
@@ -51,10 +63,14 @@ def run_docker():
             pytest.fail(
                 f"Expected log file does not exist.\nStderr: {process.stderr.decode()}"
             )
+        # Return sanitized versions of the output and log file. `sanitize` just replaces all
+        # whitespace with one single whitespace.
+        # This means we can assert multiline blocks of text and tables in the output/logs without
+        # breaking if there's slightly different whitespace.
         return (
             process.returncode,
-            process.stdout.decode(),
-            log_file.read_text(),
+            sanitize(process.stdout.decode()),
+            sanitize(log_file.read_text()),
         )
 
     return _run
