@@ -115,7 +115,7 @@ ruff *args=".": devenv
 check *args: devenv black ruff
     docker pull hadolint/hadolint
     docker run --rm -i hadolint/hadolint < Dockerfile
-    shellcheck *.sh scripts/*.sh tests/*.sh
+    shellcheck *.sh scripts/*.sh
 
 # fix formatting and import sort ordering
 fix: devenv
