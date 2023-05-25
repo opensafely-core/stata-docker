@@ -53,7 +53,7 @@ generate a new license file, first obtain the new details (provided in a PDF fil
 
 Then run:
 
-    docker run --rm -v --user "$(id -u):$(id -g)" $PWD:/src -w /usr/local/stata --entrypoint /src/scripts/renew-license.sh ghcr.io/opensafely-core/stata-mp 'SERIAL' 'CODE' 'AUTH'
+    docker run --rm -v $PWD:/src -w /usr/local/stata --entrypoint /src/scripts/renew-license.sh ghcr.io/opensafely-core/stata-mp 'SERIAL' 'CODE' 'AUTH'
 
 (Note the single quotes to ensure the code/auth are passed literally.)
 
