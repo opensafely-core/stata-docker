@@ -1,4 +1,5 @@
 import os
+import pwd
 import re
 import subprocess
 import sys
@@ -45,14 +46,24 @@ def check_stata_license():
 @pytest.fixture
 def run_docker():
     def _run(command):
-        filestem = Path(command.split()[0]).stem
-        user = subprocess.check_output(
-            "echo $(id -u):$(id -g)", shell=True, universal_newlines=True
-        ).strip("\n")
+        command_list = command.split()
+        filestem = Path(command_list[0]).stem
+        uid = os.getuid()
+        gid = pwd.getpwuid(uid).pw_gid
         process = subprocess.run(
-            f"docker run --rm --user {user} -e STATA_LICENSE -v {TESTS_PATH.resolve()}:/workspace "
-            f"{IMAGE} {command}",
-            shell=True,
+            [
+                "docker",
+                "run",
+                "--rm",
+                "--user",
+                f"{uid}:{gid}",
+                "-e",
+                "STATA_LICENSE",
+                "-v",
+                f"{TESTS_PATH.resolve()}:/workspace",
+                IMAGE,
+                *command_list,
+            ],
             capture_output=True,
         )
         log_file = TESTS_PATH / f"{filestem}.log"
