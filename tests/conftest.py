@@ -35,7 +35,7 @@ def cleanup():
             output_file.unlink()
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(autouse=True, scope="session")
 def check_stata_license():
     if "STATA_LICENSE" not in os.environ:
         print("No STATA_LICENSE detected")
