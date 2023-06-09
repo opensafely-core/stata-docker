@@ -1,7 +1,7 @@
-from .conftest import sanitize
+from .helpers import run_stata, sanitize
 
 
-def test_arrowload_single_batch(run_docker):
+def test_arrowload_single_batch():
     """
     Test the happy path with an arrow file that is loaded in a single batch.
 
@@ -23,7 +23,7 @@ def test_arrowload_single_batch(run_docker):
         s1, s1a: i4/i4a values, already converted to string before loading
         c1, c1a: category (A, B, C, D), with and without nulls
     """
-    return_code, output, log_content = run_docker("analysis/arrowload/arrowload.do")
+    return_code, output, log_content = run_stata("analysis/arrowload/arrowload.do")
     assert return_code == 0
 
     # Assert that there's just one batch
@@ -140,7 +140,7 @@ def test_arrowload_single_batch(run_docker):
         assert values in output, f"Unexpected values found in {label}: {output}"
 
 
-def test_arrowload_multiple_batch(run_docker):
+def test_arrowload_multiple_batch():
     """
     Test the happy path with an arrow file that is loaded in a two batches.
 
@@ -155,7 +155,7 @@ def test_arrowload_multiple_batch(run_docker):
     The string var (which is a stringified version of the int64 var) also creates a
     smaller string type in the first batch, which is recast to str11 in the second batch.
     """
-    return_code, output, log_content = run_docker(
+    return_code, output, log_content = run_stata(
         "analysis/arrowload/arrowload-batches.do"
     )
     assert return_code == 0
@@ -241,63 +241,63 @@ def test_arrowload_multiple_batch(run_docker):
         assert values in output, f"Unexpected values found in {label}: {output}"
 
 
-def test_arrowload_too_long_variable_names(run_docker):
+def test_arrowload_too_long_variable_names():
     """
     Variable names that are too long for stata variables raise an error
     """
-    return_code, output, _ = run_docker("analysis/arrowload/arrowload-too-long.do")
+    return_code, output, _ = run_stata("analysis/arrowload/arrowload-too-long.do")
     assert return_code == 1
     assert "Invalid variable names found" in output
 
 
-def test_arrowload_aliased_long_variable_names(run_docker):
+def test_arrowload_aliased_long_variable_names():
     """
     Test an arrowload command with a config file containing aliased for the too-long
     variable names
     """
-    return_code, _, _ = run_docker("analysis/arrowload/arrowload-too-long-aliased.do")
+    return_code, _, _ = run_stata("analysis/arrowload/arrowload-too-long-aliased.do")
     assert return_code == 0
 
 
-def test_arrowload_bad_aliases(run_docker):
+def test_arrowload_bad_aliases():
     """
     Aliased variable names that are too long for stata variables raise an error
     """
-    return_code, output, _ = run_docker("analysis/arrowload/arrowload-bad-aliases.do")
+    return_code, output, _ = run_stata("analysis/arrowload/arrowload-bad-aliases.do")
     assert return_code == 1
     assert "aliases longer than the allowed length" in output
 
 
-def test_arrowload_config_file_not_found(run_docker):
+def test_arrowload_config_file_not_found():
     """
     If a specified config file isn't found, the arrowload module attempts to continue
     and just shows a warning
     """
-    return_code, output, _ = run_docker(
+    return_code, output, _ = run_stata(
         "analysis/arrowload/arrowload-configfile-not-found.do"
     )
     assert return_code == 0
     assert "WARNING: Config file not found" in output
 
 
-def test_arrowload_config_file_no_data(run_docker):
+def test_arrowload_config_file_no_data():
     """
     If a specified config file has no data (contains only one line, and no alias headers),
     the arrowload module attempts to continue and just shows a warning
     """
-    return_code, output, _ = run_docker(
+    return_code, output, _ = run_stata(
         "analysis/arrowload/arrowload-no-aliases-headers-1.do"
     )
     assert return_code == 0
     assert "WARNING: No data found in configfile" in output
 
 
-def test_arrowload_config_file_no_alias_headers(run_docker):
+def test_arrowload_config_file_no_alias_headers():
     """
     If a specified config file has data, but no alias headers, the arrowload module attempts
     to continue and just shows a warning
     """
-    return_code, output, _ = run_docker(
+    return_code, output, _ = run_stata(
         "analysis/arrowload/arrowload-no-aliases-headers-2.do"
     )
     assert return_code == 0
@@ -306,12 +306,12 @@ def test_arrowload_config_file_no_alias_headers(run_docker):
     )
 
 
-def test_arrowload_aliases_with_multiple_batches(run_docker):
+def test_arrowload_aliases_with_multiple_batches():
     """
     Test that the variable name aliasing succeeds when the arrow file is read in multiple
     batched
     """
-    return_code, output, _ = run_docker(
+    return_code, output, _ = run_stata(
         "analysis/arrowload/arrowload-batches-aliased.do"
     )
     assert "i3a aliased to aliased_i3a" in output

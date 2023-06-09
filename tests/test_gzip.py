@@ -5,9 +5,10 @@ loaded properly by stata
 import gzip
 
 from .conftest import TESTS_PATH
+from .helpers import run_stata
 
 
-def test_handle_gzip_csv_data(run_docker):
+def test_handle_gzip_csv_data():
     # create a gzipped file
     with gzip.open(TESTS_PATH / "output" / "input.csv.gz", "wb") as f:
         f.write(b"a,b,c\n1,2,3")
@@ -16,7 +17,7 @@ def test_handle_gzip_csv_data(run_docker):
     gzipped_dta_file = TESTS_PATH / "output" / "model.dta.gz"
     assert not gunzipped_file.exists()
 
-    return_code, _, _ = run_docker("analysis/gz.do")
+    return_code, _, _ = run_stata("analysis/gz.do")
     assert return_code == 0
 
     assert gunzipped_file.exists()
