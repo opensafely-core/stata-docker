@@ -1,1 +1,1 @@
-. arrowload "output/data.arrow", configfile("configfiles/aliases_with_no_headers.csv")
+. arrowload "fixtures/data.arrow", configfile("configfiles/aliases_with_no_headers.csv")

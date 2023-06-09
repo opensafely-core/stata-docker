@@ -1,18 +1,7 @@
-import shutil
-
-import pytest
-
-from .conftest import TESTS_PATH, sanitize
+from .conftest import sanitize
 
 
-@pytest.fixture()
-def setup_arrow_files():
-    for filep in (TESTS_PATH / "fixtures").glob("*.arrow"):
-        shutil.copy(filep, TESTS_PATH / "output" / filep.name)
-    yield
-
-
-def test_arrowload_single_batch(run_docker, setup_arrow_files):
+def test_arrowload_single_batch(run_docker):
     """
     Test the happy path with an arrow file that is loaded in a single batch.
 
@@ -151,7 +140,7 @@ def test_arrowload_single_batch(run_docker, setup_arrow_files):
         assert values in output, f"Unexpected values found in {label}: {output}"
 
 
-def test_arrowload_multiple_batch(run_docker, setup_arrow_files):
+def test_arrowload_multiple_batch(run_docker):
     """
     Test the happy path with an arrow file that is loaded in a two batches.
 
@@ -252,7 +241,7 @@ def test_arrowload_multiple_batch(run_docker, setup_arrow_files):
         assert values in output, f"Unexpected values found in {label}: {output}"
 
 
-def test_arrowload_too_long_variable_names(run_docker, setup_arrow_files):
+def test_arrowload_too_long_variable_names(run_docker):
     """
     Variable names that are too long for stata variables raise an error
     """
@@ -261,7 +250,7 @@ def test_arrowload_too_long_variable_names(run_docker, setup_arrow_files):
     assert "Invalid variable names found" in output
 
 
-def test_arrowload_aliased_long_variable_names(run_docker, setup_arrow_files):
+def test_arrowload_aliased_long_variable_names(run_docker):
     """
     Test an arrowload command with a config file containing aliased for the too-long
     variable names
@@ -270,7 +259,7 @@ def test_arrowload_aliased_long_variable_names(run_docker, setup_arrow_files):
     assert return_code == 0
 
 
-def test_arrowload_bad_aliases(run_docker, setup_arrow_files):
+def test_arrowload_bad_aliases(run_docker):
     """
     Aliased variable names that are too long for stata variables raise an error
     """
@@ -279,7 +268,7 @@ def test_arrowload_bad_aliases(run_docker, setup_arrow_files):
     assert "aliases longer than the allowed length" in output
 
 
-def test_arrowload_config_file_not_found(run_docker, setup_arrow_files):
+def test_arrowload_config_file_not_found(run_docker):
     """
     If a specified config file isn't found, the arrowload module attempts to continue
     and just shows a warning
@@ -291,7 +280,7 @@ def test_arrowload_config_file_not_found(run_docker, setup_arrow_files):
     assert "WARNING: Config file not found" in output
 
 
-def test_arrowload_config_file_no_data(run_docker, setup_arrow_files):
+def test_arrowload_config_file_no_data(run_docker):
     """
     If a specified config file has no data (contains only one line, and no alias headers),
     the arrowload module attempts to continue and just shows a warning
@@ -303,7 +292,7 @@ def test_arrowload_config_file_no_data(run_docker, setup_arrow_files):
     assert "WARNING: No data found in configfile" in output
 
 
-def test_arrowload_config_file_no_alias_headers(run_docker, setup_arrow_files):
+def test_arrowload_config_file_no_alias_headers(run_docker):
     """
     If a specified config file has data, but no alias headers, the arrowload module attempts
     to continue and just shows a warning
@@ -317,7 +306,7 @@ def test_arrowload_config_file_no_alias_headers(run_docker, setup_arrow_files):
     )
 
 
-def test_arrowload_aliases_with_multiple_batches(run_docker, setup_arrow_files):
+def test_arrowload_aliases_with_multiple_batches(run_docker):
     """
     Test that the variable name aliasing succeeds when the arrow file is read in multiple
     batched

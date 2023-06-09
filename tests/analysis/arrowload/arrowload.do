@@ -1,4 +1,4 @@
-. arrowload "output/data.arrow"
+. arrowload "fixtures/data.arrow"
 
 . desc
 
