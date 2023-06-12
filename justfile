@@ -115,7 +115,7 @@ ruff *args=".": devenv
 check *args: devenv black ruff
     docker pull hadolint/hadolint
     docker run --rm -i hadolint/hadolint < Dockerfile
-    shellcheck *.sh scripts/*.sh tests/*.sh
+    shellcheck *.sh scripts/*.sh
 
 # fix formatting and import sort ordering
 fix: devenv
@@ -125,8 +125,8 @@ fix: devenv
 build: _env
     docker-compose build --pull stata-mp
 
-test: _env
-	./tests/run.sh stata-mp
+test *args: devenv
+    $BIN/pytest {{ args }}
 
 # docker leaves files around as root
 clean-logs:

@@ -1,4 +1,4 @@
-. arrowload "output/data_multiple_batches.arrow", configfile("configfiles/aliases.csv")
+. arrowload "fixtures/data_multiple_batches.arrow", configfile("configfiles/aliases.csv")
 
 . desc
 

@@ -1,4 +1,4 @@
-. arrowload "output/data_multiple_batches.arrow"
+. arrowload "fixtures/data_multiple_batches.arrow"
 
 . desc
 
