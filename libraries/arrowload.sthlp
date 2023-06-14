@@ -41,4 +41,4 @@ Examples
 
     . arrowload "/workspace/dataset.arrow"
 
-    . arrowload "/workspace/dataset.arrow", aliases("/workspace/aliases.csv")
+    . arrowload "/workspace/dataset.arrow", configfile("/workspace/config.csv")
