@@ -318,3 +318,15 @@ def test_arrowload_aliases_with_multiple_batches():
     assert "i3a aliased to aliased_i3a" in output
     assert "s1 aliased to aliased_s1" in output
     assert return_code == 0
+
+
+def test_arrowload_data_exists():
+    """
+    Test that loading an arrow file when data already exists returns
+    the expected error message
+    """
+    return_code, output, _ = run_stata(
+        "analysis/arrowload/arrowload-with-existing-data.do"
+    )
+    assert return_code == 1
+    assert "no; dataset in memory has changed since last saved" in output

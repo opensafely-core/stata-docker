@@ -19,6 +19,9 @@ from pyarrow.types import (
 def main(filename, configfile=None):
     if not Path(filename).exists():
         print_error_and_exit(f"Arrow file not found at {filename}", 601)
+    if sfi.Data.getVarCount() > 0:
+        # exit with the standard "dataset in memory has changed" message
+        print_error_and_exit(None, 4)
     converter = ArrowConverter(filename, configfile)
     converter.load_data()
 
@@ -33,7 +36,8 @@ def print_error_and_exit(message, error_code=7103):
     Otherwise, default to 7103, which is a generic stata return code
     when it can't execute a python script
     """
-    sfi.SFIToolkit.errprintln(message)
+    if message:
+        sfi.SFIToolkit.errprintln(message)
     sfi.SFIToolkit.error(error_code)
 
 
