@@ -243,7 +243,7 @@ def test_arrowload_multiple_batch():
 
 def test_arrowload_too_long_variable_names():
     """
-    Variable names that are too long for stata variables raise an error
+    Variable names that are too long for stata variables print an error message and exit
     """
     return_code, output, _ = run_stata("analysis/arrowload/arrowload-too-long.do")
     assert return_code == 1
@@ -261,11 +261,12 @@ def test_arrowload_aliased_long_variable_names():
 
 def test_arrowload_bad_aliases():
     """
-    Aliased variable names that are too long for stata variables raise an error
+    Aliased variable names that are too long for stata variables print an error
+    message and exit
     """
     return_code, output, _ = run_stata("analysis/arrowload/arrowload-bad-aliases.do")
     assert return_code == 1
-    assert "aliases longer than the allowed length" in output
+    assert "Config file contains aliases longer than the allowed length" in output
 
 
 def test_arrowload_config_file_not_found():

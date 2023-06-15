@@ -17,8 +17,24 @@ from pyarrow.types import (
 
 
 def main(filename, configfile=None):
+    if not Path(filename).exists():
+        print_error_and_exit(f"Arrow file not found at {filename}", 601)
     converter = ArrowConverter(filename, configfile)
     converter.load_data()
+
+
+def print_error_and_exit(message, error_code=7103):
+    """
+    A helper function to log an error message and then exit.
+    This lets us catch expected errors, and print a user-friendly
+    message in the stata output, rather than an unexpected python
+    error.
+    If a relevant stata error code exists, we error with it here.
+    Otherwise, default to 7103, which is a generic stata return code
+    when it can't execute a python script
+    """
+    sfi.SFIToolkit.errprintln(message)
+    sfi.SFIToolkit.error(error_code)
 
 
 class ArrowConverter:
@@ -63,14 +79,14 @@ class ArrowConverter:
             return config
         config_path = Path(configfile)
         if not config_path.exists():
-            print(f"WARNING: Config file not found at {configfile}")
+            sfi.SFIToolkit.displayln(f"WARNING: Config file not found at {configfile}")
             return config
 
         with open(config_path) as config_csv:
             reader = csv.DictReader(config_csv)
             config = [row for row in reader]
             if not config:
-                print(
+                sfi.SFIToolkit.displayln(
                     f"WARNING: No data found in configfile {configfile}; does it contain headers?"
                 )
             return config
@@ -83,7 +99,7 @@ class ArrowConverter:
         expected_headers = {"original_column", "aliased_column"}
         first_row = config[0]
         if expected_headers - set(first_row.keys()):
-            print(
+            sfi.SFIToolkit.displayln(
                 "WARNING: file does not contain expected column headers for aliases "
                 "(original_column, aliased_column)"
             )
@@ -91,7 +107,7 @@ class ArrowConverter:
         aliases = {row["original_column"]: row["aliased_column"] for row in config}
         too_long_aliases = any(key for key, value in aliases.items() if len(value) > 32)
         if too_long_aliases:
-            raise ValueError(
+            print_error_and_exit(
                 "Config file contains aliases longer than the allowed length (32)"
             )
         return aliases
@@ -121,9 +137,11 @@ class ArrowConverter:
             col_range = compute.min_max(batch[column_name]).as_py()
             return col_range["min"], col_range["max"]
 
-        assert (
-            column_type == "category"
-        ), f"Can only get range for int or category types, got {column_type}"
+        if column_type != "category":
+            print_error_and_exit(
+                f"Attempted to determine value range for unexpected type: {column_type}. "
+                "Expected one of byte, int, long or category."
+            )
         return (0, len(batch[column_name].dictionary))
 
     def get_stata_type_from_range(self, batch, min_val, max_val, column_name):
@@ -149,7 +167,9 @@ class ArrowConverter:
 
         if batch_type is None:
             # range is too big for stata integer types
-            print(f"Column {column_name} is out of integer range; converting to string")
+            sfi.SFIToolkit.displayln(
+                f"Column {column_name} is out of integer range; converting to string"
+            )
             batch = self.convert_int64_column_to_string(batch, column_name)
             batch_type = "string"
 
@@ -234,14 +254,16 @@ class ArrowConverter:
                     self.aliases.get(varname, varname), prefix=False
                 )
                 if cleaned_name != varname:
-                    print(f"{varname} aliased to {cleaned_name}")
+                    sfi.SFIToolkit.displayln(f"{varname} aliased to {cleaned_name}")
                 self.column_names.append(cleaned_name)
 
             if too_long_names:
-                raise ValueError(
-                    f"Invalid variable names found ({','.join(too_long_names)})\n"
-                    f"To fix this, rename variables in arrow file to <32 characters.\n"
-                    f"Alternatively, a CSV file of original to alias names can be provided."
+                quoted_names = [f"'{name}'" for name in too_long_names]
+                print_error_and_exit(
+                    f"Invalid variable names found ({','.join(quoted_names)})\n"
+                    f"To fix this, rename variables in the arrow file to <32 characters.\n"
+                    f"Alternatively, a CSV configfile containing of original to aliased names "
+                    "can be provided."
                 )
 
         # Generate a new batch with the cleaned/aliased column names.
@@ -393,7 +415,9 @@ class ArrowConverter:
                 elif vartype == "float":
                     sfi.Data.addVarFloat(varname)
                 else:
-                    assert False, f"Unhandled type: {vartype}"
+                    print_error_and_exit(
+                        f"Unhandled type: {vartype} for column {varname}"
+                    )
         else:
             # If any columns have changed required type when we process a
             # subsequent batch, recast the existing stata column
@@ -404,7 +428,7 @@ class ArrowConverter:
                 if self.column_types[col] != pre_processed_column_types[col]
             }
             for changed_col, changed_type in changed_cols.items():
-                print(f"Converting {changed_cols}")
+                sfi.SFIToolkit.displayln(f"Converting {changed_cols}")
                 if changed_type == "string":
                     # If the variable has changed in a subsequent batch to string type, it
                     # means it was previously considered integer type and is now too big to
@@ -469,7 +493,9 @@ class ArrowConverter:
             if column_type not in ["boolean", "byte", "int", "long", "date"]:
                 continue
             column_type = column_type_mappings.get(column_type, column_type)
-            print(f"Finalising column {column_name} (type ({column_type})")
+            sfi.SFIToolkit.displayln(
+                f"Finalising column {column_name} (type ({column_type})"
+            )
             sfi.SFIToolkit.stata(
                 f"replace {column_name} = . if {column_name} == {self.MISSING_VALUES[column_type]}"
             )
@@ -509,7 +535,7 @@ class ArrowConverter:
     def load_data(self):
         next_obs = 0
         for batch, batch_num, total in self.arrow_batches:
-            print(f"Reading batch {batch_num} of {total}")
+            sfi.SFIToolkit.displayln(f"Reading batch {batch_num} of {total}")
             batch, pre_processed_column_types = self.process_batch(batch)
             # make variables
             self.make_vars(pre_processed_column_types, batch)
