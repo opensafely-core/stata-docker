@@ -330,3 +330,40 @@ def test_arrowload_data_exists():
     )
     assert return_code == 1
     assert "no; dataset in memory has changed since last saved" in output
+
+
+def test_arrowload_verbosity():
+    # All .do files in this test attempt to load valid data with a
+    # non-existent configfile, which outputs a warning, if verbosity
+    # level allows
+
+    # the progress message is always shown
+    progress_message = "Reading batch 1 of 1"
+    # warnings are shown with verbosity level 2 or 3
+    warning_message = "WARNING: Config file not found"
+    # other output messages are only shown with verbosity level 3
+    info_message = "Finalising column"
+
+    # Verbosity level 2
+    return_code, output, _ = run_stata(
+        "analysis/arrowload/arrowload-verbosity-warning.do"
+    )
+    assert return_code == 0
+    for message in [progress_message, warning_message]:
+        assert message in output
+    assert info_message not in output
+
+    # Verbosity level 1
+    return_code, output, _ = run_stata("analysis/arrowload/arrowload-verbosity-none.do")
+    assert return_code == 0
+    assert progress_message in output
+    for message in [warning_message, info_message]:
+        assert message not in output
+
+    # Verbosity level 4 (invalid, defaults to 3)
+    return_code, output, _ = run_stata(
+        "analysis/arrowload/arrowload-verbosity-default.do"
+    )
+    assert return_code == 0
+    for message in [progress_message, warning_message, info_message]:
+        assert message in output
