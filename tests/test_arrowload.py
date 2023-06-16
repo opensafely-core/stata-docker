@@ -315,8 +315,8 @@ def test_arrowload_aliases_with_multiple_batches():
     return_code, output, _ = run_stata(
         "analysis/arrowload/arrowload-batches-aliased.do"
     )
-    assert "i3a aliased to aliased_i3a" in output
-    assert "s1 aliased to aliased_s1" in output
+    assert "'i3a' aliased to 'aliased_i3a'" in output
+    assert "'s1' aliased to 'aliased_s1'" in output
     assert return_code == 0
 
 

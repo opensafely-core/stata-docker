@@ -202,7 +202,7 @@ class ArrowConverter:
         if batch_type is None:
             # range is too big for stata integer types
             self.display(
-                f"Column {column_name} is out of integer range; converting to string"
+                f"Column '{column_name}' is out of integer range; converting to string"
             )
             batch = self.convert_int64_column_to_string(batch, column_name)
             batch_type = "string"
@@ -288,7 +288,7 @@ class ArrowConverter:
                     self.aliases.get(varname, varname), prefix=False
                 )
                 if cleaned_name != varname:
-                    self.display(f"{varname} aliased to {cleaned_name}")
+                    self.display(f"'{varname}' aliased to '{cleaned_name}'")
                 self.column_names.append(cleaned_name)
 
             if too_long_names:
@@ -450,7 +450,7 @@ class ArrowConverter:
                     sfi.Data.addVarFloat(varname)
                 else:
                     print_error_and_exit(
-                        f"Unhandled type: {vartype} for column {varname}"
+                        f"Unhandled type: {vartype} for column '{varname}'"
                     )
         else:
             # If any columns have changed required type when we process a
