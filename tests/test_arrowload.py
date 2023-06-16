@@ -243,7 +243,7 @@ def test_arrowload_multiple_batch():
 
 def test_arrowload_too_long_variable_names():
     """
-    Variable names that are too long for stata variables raise an error
+    Variable names that are too long for stata variables print an error message and exit
     """
     return_code, output, _ = run_stata("analysis/arrowload/arrowload-too-long.do")
     assert return_code == 1
@@ -261,11 +261,12 @@ def test_arrowload_aliased_long_variable_names():
 
 def test_arrowload_bad_aliases():
     """
-    Aliased variable names that are too long for stata variables raise an error
+    Aliased variable names that are too long for stata variables print an error
+    message and exit
     """
     return_code, output, _ = run_stata("analysis/arrowload/arrowload-bad-aliases.do")
     assert return_code == 1
-    assert "aliases longer than the allowed length" in output
+    assert "Config file contains aliases longer than the allowed length" in output
 
 
 def test_arrowload_config_file_not_found():
@@ -314,6 +315,55 @@ def test_arrowload_aliases_with_multiple_batches():
     return_code, output, _ = run_stata(
         "analysis/arrowload/arrowload-batches-aliased.do"
     )
-    assert "i3a aliased to aliased_i3a" in output
-    assert "s1 aliased to aliased_s1" in output
+    assert "'i3a' aliased to 'aliased_i3a'" in output
+    assert "'s1' aliased to 'aliased_s1'" in output
     assert return_code == 0
+
+
+def test_arrowload_data_exists():
+    """
+    Test that loading an arrow file when data already exists returns
+    the expected error message
+    """
+    return_code, output, _ = run_stata(
+        "analysis/arrowload/arrowload-with-existing-data.do"
+    )
+    assert return_code == 1
+    assert "no; dataset in memory has changed since last saved" in output
+
+
+def test_arrowload_verbosity():
+    # All .do files in this test attempt to load valid data with a
+    # non-existent configfile, which outputs a warning, if verbosity
+    # level allows
+
+    # the progress message is always shown
+    progress_message = "Reading batch 1 of 1"
+    # warnings are shown with verbosity level 2 or 3
+    warning_message = "WARNING: Config file not found"
+    # other output messages are only shown with verbosity level 3
+    info_message = "Finalising missing values"
+
+    # Verbosity level 2
+    return_code, output, _ = run_stata(
+        "analysis/arrowload/arrowload-verbosity-warning.do"
+    )
+    assert return_code == 0
+    for message in [progress_message, warning_message]:
+        assert message in output
+    assert info_message not in output
+
+    # Verbosity level 1
+    return_code, output, _ = run_stata("analysis/arrowload/arrowload-verbosity-none.do")
+    assert return_code == 0
+    assert progress_message in output
+    for message in [warning_message, info_message]:
+        assert message not in output
+
+    # Verbosity level 4 (invalid, defaults to 3)
+    return_code, output, _ = run_stata(
+        "analysis/arrowload/arrowload-verbosity-default.do"
+    )
+    assert return_code == 0
+    for message in [progress_message, warning_message, info_message]:
+        assert message in output
