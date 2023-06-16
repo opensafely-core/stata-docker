@@ -434,6 +434,7 @@ class ArrowConverter:
             # This is the first batch
             # Loop over the variable name / variable type mappings and add
             # variables with the appropriate typing based on the vartype
+            self.display(f"Creating variables: {', '.join(self.column_types.keys())}")
             for varname, vartype in self.column_types.items():
                 if vartype == "string":
                     max_length = max(len(val.as_py()) for (val) in batch[varname])
@@ -462,7 +463,10 @@ class ArrowConverter:
                 if self.column_types[col] != pre_processed_column_types[col]
             }
             for changed_col, changed_type in changed_cols.items():
-                self.display(f"Converting {changed_cols}")
+                self.display(
+                    f"Converting '{changed_col}' from {pre_processed_column_types[changed_col]}"
+                    " to {changed_type}"
+                )
                 if changed_type == "string":
                     # If the variable has changed in a subsequent batch to string type, it
                     # means it was previously considered integer type and is now too big to
@@ -524,12 +528,13 @@ class ArrowConverter:
         """
         # for byte/int/long variables, replace the missing value with stata missing and recast
         # the variable to the type we expect it to be
+        self.display("Finalising missing values for integer-type columns...")
         column_type_mappings = {"boolean": "byte", "date": "long"}
         for column_name, column_type in self.column_types.items():
             if column_type not in ["boolean", "byte", "int", "long", "date"]:
                 continue
             column_type = column_type_mappings.get(column_type, column_type)
-            self.display(f"Finalising column '{column_name}' (type ({column_type})")
+            self.display(f"- column '{column_name}' (type {column_type})")
             self.run_stata_command(
                 f"replace {column_name} = . if {column_name} == {self.MISSING_VALUES[column_type]}"
             )

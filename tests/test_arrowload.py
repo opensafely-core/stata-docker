@@ -342,7 +342,7 @@ def test_arrowload_verbosity():
     # warnings are shown with verbosity level 2 or 3
     warning_message = "WARNING: Config file not found"
     # other output messages are only shown with verbosity level 3
-    info_message = "Finalising column"
+    info_message = "Finalising missing values"
 
     # Verbosity level 2
     return_code, output, _ = run_stata(
