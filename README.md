@@ -44,8 +44,12 @@ following into the `bin/` subdirectory:
 
 ## Relicensing Stata
 
-The docker image contains the machinery needed to update the license. To
-generate a new license file, first obtain the new details (provided in a PDF file on license renewal):
+This docker image contains the machinery needed to generate a license key file from valid license details.
+
+There are specific instructions for regenerating the OpenSAFELY license key for Bennett Institute staff here:
+https://bennettinstitute-team-manual.pages.dev/tech-group/playbooks/stata-license/
+
+In general, to generate a new license file, first obtain the new details (provided in a PDF file on license renewal):
 
  - serial number: 12 digit number, e.g. "12345678901"
  - code: 46 character string with spaces, e.g. "abcd efgh ijkl abcd efgh ijkl abcd efgh ijkl a"
@@ -53,20 +57,15 @@ generate a new license file, first obtain the new details (provided in a PDF fil
 
 Then run:
 
-    docker run --rm -v $PWD:/src -w /usr/local/stata --entrypoint /src/scripts/renew-license.sh ghcr.io/opensafely-core/stata-mp 'SERIAL' 'CODE' 'AUTH'
+    docker run --rm -v $PWD:/src -w /usr/local/stata --entrypoint /src/scripts/renew-license.sh \
+        ghcr.io/opensafely-core/stata-mp \
+        'SERIAL' 'CODE' 'AUTH'
 
-(Note the single quotes to ensure the code/auth are passed literally.)
+Note the single quotes to ensure the code/auth are passed literally.
 
 The resulting file will be copied to `./stata.lic` You can test this works with:
 
     ./scripts/test-license.sh
-
-The contents of this license file can then be used to update the `STATA_LICENSE`
-env var for job-runner (and restart the service) on all backends. You should also update the `stata.lic` file in
-[https://github.com/opensafely/server-instructions](https://github.com/opensafely/server-instructions)
-to the new version.
-
-You will also need to update the organisation-wide `STATA_LICENSE` secret in both `opensafely` and `opensafely-core` GitHub organisations.
 
 The process above uses the current stata-mp docker image to run stata's
 `stinit` process which can validate the license details.  This script is
