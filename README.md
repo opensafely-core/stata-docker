@@ -63,7 +63,7 @@ The resulting file will be copied to `./stata.lic` You can test this works with:
 
 The contents of this license file can then be used to update the `STATA_LICENSE`
 env var for job-runner (and restart the service) on all backends. You should also update the `stata.lic` file in
-[https://github.com/opensafely/server-instructions](https://github.com/opensafely/server-instruction)
+[https://github.com/opensafely/server-instructions](https://github.com/opensafely/server-instructions)
 to the new version.
 
 You will also need to update the organisation-wide `STATA_LICENSE` secret in both `opensafely` and `opensafely-core` GitHub organisations.
