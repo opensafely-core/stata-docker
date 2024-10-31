@@ -123,7 +123,7 @@ fix: devenv
     $BIN/ruff --fix .
 
 build: _env
-    docker-compose build --pull stata-mp
+    docker compose build --pull stata-mp
 
 test *args: devenv
     $BIN/pytest {{ args }}
