@@ -89,6 +89,7 @@ COPY libraries/* $STATA_SITE/
 COPY python_scripts/ /python_scripts
 COPY script-wrapper.sh /usr/local/bin/script-wrapper.sh
 ENV ACTION_EXEC="/usr/local/bin/script-wrapper.sh"
+ENV INTERACTIVE_EXEC="/usr/local/bin/stata"
 
 # tag with build info as the very last step, as it will never be cached
 ARG BUILD_DATE
