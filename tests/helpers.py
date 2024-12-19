@@ -21,7 +21,10 @@ def sanitize(string):
     return RE_WHITESPACE.sub(" ", string).strip()
 
 
-def run_stata(command):
+def run_stata(command, workspace=None):
+    if workspace is None:
+        workspace = TESTS_PATH.resolve()
+
     command_list = command.split()
     filestem = Path(command_list[0]).stem
     uid = os.getuid()
@@ -36,13 +39,13 @@ def run_stata(command):
             "-e",
             "STATA_LICENSE",
             "-v",
-            f"{TESTS_PATH.resolve()}:/workspace",
+            f"{workspace}:/workspace",
             IMAGE,
             *command_list,
         ],
         capture_output=True,
     )
-    log_file = TESTS_PATH / f"{filestem}.log"
+    log_file = workspace / f"{filestem}.log"
     # The log file should always exist, even if the .do file failed to load.
     # If it doesn't, something probably went wrong with running the container itself,
     # so fail and report the process stderr.
