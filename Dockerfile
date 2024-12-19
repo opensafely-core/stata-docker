@@ -16,10 +16,12 @@ RUN --mount=type=cache,target=/var/cache/apt \
     echo "deb https://ppa.launchpadcontent.net/deadsnakes/ppa/ubuntu jammy main" > /etc/apt/sources.list.d/deadsnakes-ppa.list &&\
     /usr/lib/apt/apt-helper download-file 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xf23c5a6cf475977595c89f51ba6932366a755776' /etc/apt/trusted.gpg.d/deadsnakes.asc
 
-# stata needs libpng16, install python dependencies
+# stata needs libpng16, install python dependencies, and imagemagick
+# edit imagemagick policy to allow eps conversion, which is disabled by default
 COPY packages.txt /root/packages.txt
 RUN --mount=type=cache,target=/var/cache/apt \
-    /root/docker-apt-install.sh /root/packages.txt
+    /root/docker-apt-install.sh /root/packages.txt &&\
+    sed -i -z 's#<!-- disable ghostscript.*</policymap>#</policymap>#g' /etc/ImageMagick-6/policy.xml
 
 # set PYTHONUSERBASE for installing user packages
 ENV PYTHONUSERBASE=/usr/local
