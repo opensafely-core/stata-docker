@@ -35,5 +35,8 @@ jobs:
       - name: Push image to GitHub Container Registry
         run: |
           IMAGE_ID=ghcr.io/${{ github.repository_owner }}/$IMAGE_NAME
+          docker tag $IMAGE_NAME $IMAGE_ID:v1
+          docker push $IMAGE_ID:v1
+          # v1 is also latest currently
           docker tag $IMAGE_NAME $IMAGE_ID:latest
           docker push $IMAGE_ID:latest
