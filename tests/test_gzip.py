@@ -2,6 +2,7 @@
 This tests both the gunzip functionality and also that shipped libraries are
 loaded properly by stata
 """
+
 import gzip
 
 from .conftest import TESTS_PATH
