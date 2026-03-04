@@ -7,6 +7,8 @@ on:
 env:
   IMAGE_NAME: stata-mp
   STATA_LICENSE: ${{ secrets.STATA_LICENSE }}
+permissions:
+  contents: read
 
 jobs:
 
