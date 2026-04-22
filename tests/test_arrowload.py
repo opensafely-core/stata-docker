@@ -29,8 +29,7 @@ def test_arrowload_single_batch():
     # Assert that there's just one batch
     batch_log = "Reading batch 1 of 1"
     # Assert that all the variables as expected types
-    description_table = sanitize(
-        """
+    description_table = sanitize("""
         Contains data
         obs:         1,000
         vars:            19
@@ -58,73 +57,56 @@ def test_arrowload_single_batch():
         s1              str11   %11s                  s1
         s1a             str11   %11s                  s1a
         -------------------------------------------------------------------------------
-    """
-    )
+    """)
     for content in [output, log_content]:
         assert batch_log in content
         assert description_table in content
 
     # expected boolean and category values in rows 1, 2 and 1000
     # null values are shown as stata null .
-    bool_cat_1_and_2 = sanitize(
-        """
+    bool_cat_1_and_2 = sanitize("""
             b1   c1   c1a
         1.    1    A     A
         2.    1    A     .
-    """
-    )
-    bool_cat_1000 = sanitize(
-        """
+    """)
+    bool_cat_1000 = sanitize("""
                 b1   c1   c1a
         1000.    0    C     C
-    """
-    )
+    """)
     # expected date and timestamp values in rows 1, 2 and 1000
     # null values are shown as stata null .
-    date_ts_1_and_2 = sanitize(
-        """
+    date_ts_1_and_2 = sanitize("""
                     d1         d1a                   t1                  t1a
         1.   01oct2023   01oct2023   01oct2023 10:30:00   01oct2023 10:30:00
         2.   01oct2023           .   01oct2023 10:30:00                    .
-    """
-    )
-    date_ts_1000 = sanitize(
-        """
+    """)
+    date_ts_1000 = sanitize("""
                     d1         d1a                   t1                  t1a
         1000.   01dec2023   01dec2023   01oct2023 22:30:00   01oct2023 22:30:00
-    """
-    )
+    """)
     # expected byte, int, long, float in rows 1, 2 and 1000
     # null values are shown as stata null .
-    numeric_1_and_2 = sanitize(
-        """
+    numeric_1_and_2 = sanitize("""
             i1   i1a     i2    i2a       i3      i3a       f1      f1a
         1.   10    10   2000   2000   100000   100000   55.565   55.565
         2.   10     .   2000      .   100000        .   55.565        .
-    """
-    )
-    numeric_1000 = sanitize(
-        """
+    """)
+    numeric_1000 = sanitize("""
                 i1   i1a     i2    i2a        i3       i3a     f1    f1a
         1000.   -12   -12   -350   -350   -200000   -200000   -4.5   -4.5
-    """
-    )
+    """)
     # expected int64 (converted to string when loaded to stata)
     # and string equivalent (already converted to string)
     # null values are shown as empty string
-    int64_1_and_2 = sanitize(
-        """
+    int64_1_and_2 = sanitize("""
                     i4          i4a           s1          s1a
         1.   2500000000   2500000000   2500000000   2500000000
         2.   2500000000                2500000000
-    """
-    )
-    int64_1000 = sanitize(
-        """
+    """)
+    int64_1000 = sanitize("""
                         i4           i4a            s1           s1a
         1000.   -2700000000   -2700000000   -2700000000   -2700000000
-    """
-    )
+    """)
     expected = {
         "boolean and category rows 1 and 2": bool_cat_1_and_2,
         "boolean and category row 1000": bool_cat_1000,
@@ -163,8 +145,7 @@ def test_arrowload_multiple_batch():
     # Assert that there are two batches
     batch_log = "Reading batch 1 of 2"
     # Assert that all the variables as expected types
-    description_table = sanitize(
-        """
+    description_table = sanitize("""
         Contains data
         obs:       100,000
         vars:            19
@@ -192,8 +173,7 @@ def test_arrowload_multiple_batch():
         s1              str11   %11s                  s1
         s1a             str11   %11s                  s1a
         -------------------------------------------------------------------------------
-    """
-    )
+    """)
     for content in [output, log_content]:
         assert batch_log in content
         assert description_table in content
@@ -201,35 +181,27 @@ def test_arrowload_multiple_batch():
     # expected byte, int, long in rows 1, 2 and 100,000
     # byte-sized for all
     # null values are still read correctly as stata null .
-    numeric_1_and_2 = sanitize(
-        """
+    numeric_1_and_2 = sanitize("""
         i1   i1a   i2   i2a   i3   i3a
     1.   10    10   15    15   15    15
     2.   10     .   15     .   15     .
-    """
-    )
-    numeric_100000 = sanitize(
-        """
+    """)
+    numeric_100000 = sanitize("""
             i1   i1a     i2    i2a        i3       i3a
     100000.   -12   -12   -350   -350   -200000   -200000
-    """
-    )
+    """)
     # expected int64 (converted to string when loaded to stata)
     # and string equivalent (already converted to string)
     # also byte-sized in rows 1 and 2
-    int64_1_and_2 = sanitize(
-        """
+    int64_1_and_2 = sanitize("""
         i4   s1
     1.   15   15
     2.   15   15
-    """
-    )
-    int64_1000000 = sanitize(
-        """
+    """)
+    int64_1000000 = sanitize("""
                     i4            s1
     100000.   -2700000000   -2700000000
-    """
-    )
+    """)
     expected = {
         "byte, int, long rows 1 and 2": numeric_1_and_2,
         "byte, int, long row 1000": numeric_100000,
