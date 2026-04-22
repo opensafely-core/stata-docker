@@ -25,6 +25,3 @@ extend-ignore = [
   "E501",
   "E731",
 ]
-
-[tool.ruff.isort]
-lines-after-imports = 2
