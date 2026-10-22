@@ -4,9 +4,6 @@ export VIRTUAL_ENV  := `echo ${VIRTUAL_ENV:-.venv}`
 
 # TODO: make it /scripts on windows?
 export BIN := VIRTUAL_ENV + "/bin"
-export PIP := BIN + "/python -m pip"
-# enforce our chosen pip compile flags
-export COMPILE := BIN + "/pip-compile --allow-unsafe --generate-hashes"
 
 # Load .env files by default
 set dotenv-load := true
@@ -38,18 +35,15 @@ virtualenv:
         { echo "Did not find $PYTHON_VERSION in $VIRTUAL_ENV (try deleting the virtualenv (just clean) and letting it re-build)"; exit 1; }
     fi
 
-    # create venv and upgrade pip
-    test -d $VIRTUAL_ENV || { $PYTHON_VERSION -m venv $VIRTUAL_ENV && $PIP install --upgrade pip; }
-
-    # ensure we have pip-tools so we can run pip-compile
-    test -e $BIN/pip-compile || $PIP install pip-tools
+    # create venv
+    test -d $VIRTUAL_ENV || { uv venv --python $PYTHON_VERSION --seed; }
 
 
 _compile src dst *args: virtualenv
     #!/usr/bin/env bash
     # exit if src file is older than dst file (-nt = 'newer than', but we negate with || to avoid error exit code)
     test "${FORCE:-}" = "true" -o {{ src }} -nt {{ dst }} || exit 0
-    $BIN/pip-compile --allow-unsafe --generate-hashes --output-file={{ dst }} {{ src }} {{ args }}
+    uv pip compile --allow-unsafe --generate-hashes --output-file={{ dst }} {{ src }} {{ args }}
 
 
 # update requirements.prod.txt if requirements.prod.in has changed
@@ -64,12 +58,7 @@ requirements-dev *args: requirements-prod
 
 # ensure prod requirements installed and up to date
 prodenv: requirements-prod
-    #!/usr/bin/env bash
-    # exit if .txt file has not changed since we installed them (-nt == "newer than', but we negate with || to avoid error exit code)
-    test python-requirements.prod.txt -nt $VIRTUAL_ENV/.prod || exit 0
-
-    $PIP install -r python-requirements.prod.txt
-    touch $VIRTUAL_ENV/.prod
+    uv pip install -r python-requirements.txt
 
 _env:
     #!/usr/bin/env bash
@@ -84,18 +73,14 @@ _env:
 #
 # ensure dev requirements installed and up to date
 devenv: prodenv requirements-dev && install-precommit
-    # exit if .txt file has not changed since we installed them (-nt == "newer than', but we negate with || to avoid error exit code)
-    test python-requirements.dev.txt -nt $VIRTUAL_ENV/.dev || exit 0
-
-    $PIP install -r python-requirements.dev.txt
-    touch $VIRTUAL_ENV/.dev
+    uv pip install -r python-requirements.dev.txt
 
 
 # ensure precommit is installed
 install-precommit:
     #!/usr/bin/env bash
     BASE_DIR=$(git rev-parse --show-toplevel)
-    test -f $BASE_DIR/.git/hooks/pre-commit || $BIN/pre-commit install
+    test -f $BASE_DIR/.git/hooks/pre-commit || uv run pre-commit install
 
 
 # upgrade dev or prod dependencies (specify package to upgrade single package, all by default)
@@ -106,10 +91,10 @@ upgrade env package="": virtualenv
     FORCE=true {{ just_executable() }} requirements-{{ env }} $opts
 
 black *args=".": devenv
-    $BIN/black --check {{ args }}
+    uv run black --check {{ args }}
 
 ruff *args=".": devenv
-    $BIN/ruff check {{ args }}
+    uv run ruff check {{ args }}
 
 # run the various dev checks but does not change any files
 check *args: devenv black ruff
@@ -119,14 +104,14 @@ check *args: devenv black ruff
 
 # fix formatting and import sort ordering
 fix: devenv
-    $BIN/black .
-    $BIN/ruff --fix .
+    uv run black .
+    uv run ruff --fix .
 
 build: _env
     docker compose build --pull stata-mp
 
 test *args: devenv
-    $BIN/pytest {{ args }}
+    uv run pytest {{ args }}
 
 # docker leaves files around as root
 clean-logs:
