@@ -20,8 +20,7 @@ jobs:
       - uses: opensafely-core/setup-action@v1
         with:
           install-just: true
-          python-version: "3.11"
-          cache-dependency-path: "python-requirements*.txt"
+          install-uv: true
 
       - name: Check
         run: just check
@@ -34,8 +33,7 @@ jobs:
       - uses: opensafely-core/setup-action@v1
         with:
           install-just: true
-          python-version: "3.11"
-          cache-dependency-path: "python-requirements*.txt"
+          install-uv: true
 
       - name: Build image
         run: just build

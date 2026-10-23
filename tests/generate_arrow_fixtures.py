@@ -15,14 +15,14 @@ replaced null values are of the right types.
 """
 
 import random
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pyarrow
 from pyarrow import feather
 
-start_date = datetime.utcnow().replace(tzinfo=timezone.utc) - timedelta(days=365 * 100)
-end_date = datetime.utcnow().replace(tzinfo=timezone.utc) + timedelta(days=365 * 100)
+start_date = datetime.utcnow().replace(tzinfo=UTC) - timedelta(days=365 * 100)
+end_date = datetime.utcnow().replace(tzinfo=UTC) + timedelta(days=365 * 100)
 
 FIXTURES_PATH = Path(__file__).parent / "fixtures"
 
@@ -32,7 +32,7 @@ FIXTURE_DATA = {
     "date": [date(2023, 10, 1), date(2023, 12, 1)],
     # row 1 & 9 are timezone-aware, row -2 is naive
     "datetime": [
-        datetime(2023, 10, 1, 10, 30, 0, 0, tzinfo=timezone.utc),
+        datetime(2023, 10, 1, 10, 30, 0, 0, tzinfo=UTC),
         datetime(2023, 10, 1, 22, 30, 0, 0),
     ],
     "bool": [True, False],

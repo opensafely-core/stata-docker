@@ -5,3 +5,4 @@ tests/output/*.*
 .venv/
 *.pyc
 __pychache__/
+uv.lock

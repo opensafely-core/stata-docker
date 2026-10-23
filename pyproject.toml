@@ -1,3 +1,8 @@
+[project]
+name = "stata-docker"
+version = "0.0.1"
+requires-python = ">=3.11,<3.12"
+
 [tool.black]
 extend-exclude = 'bin/'
 
@@ -25,3 +30,6 @@ extend-ignore = [
   "E501",
   "E731",
 ]
+
+[tool.uv]
+required-version = ">=0.13"
