@@ -164,6 +164,15 @@ RUN mkdir -p /usr/local/stata /workspace $STATA_SITE && \
     chmod 777 $STATA_SITE && \
     ln -s /tmp/stata.lic /usr/local/stata/stata.lic
 
+# Configure Python for Stata
+# We need to point the python_exec at the system python, because the /opt/venv
+# python doesn't contain the system libaries, and we need to set the userpath to
+# the venv's site packages, to make sure we get our python dependencies
+RUN --mount=type=bind,source=.python-version,target=/.python-version \
+    python_version="$(cat /.python-version)" && \
+    printf 'set python_exec "/usr/bin/python%s"\npython set userpath "/opt/venv/lib/python%s/site-packages"\n' \
+        "$python_version" "$python_version" > /usr/local/stata/sysprofile.do
+
 WORKDIR /workspace
 
 COPY bin/ /usr/local/stata

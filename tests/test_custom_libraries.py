@@ -6,3 +6,10 @@ def test_load_custom_librarues():
     assert return_code == 0
     for content in [output, log_content]:
         assert "custom command called" in content
+
+
+def test_custom_library_can_run_python():
+    return_code, output, log_content = run_stata("analysis/custom-python.do")
+    assert return_code == 0, output
+    for content in [output, log_content]:
+        assert "Hello world" in content
