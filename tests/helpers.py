@@ -8,6 +8,7 @@ import pytest
 
 from .conftest import TESTS_PATH
 
+
 IMAGE = "stata-mp"
 RE_WHITESPACE = re.compile(r"\s+")
 

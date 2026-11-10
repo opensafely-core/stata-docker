@@ -21,6 +21,7 @@ from pathlib import Path
 import pyarrow
 from pyarrow import feather
 
+
 start_date = datetime.utcnow().replace(tzinfo=UTC) - timedelta(days=365 * 100)
 end_date = datetime.utcnow().replace(tzinfo=UTC) + timedelta(days=365 * 100)
 

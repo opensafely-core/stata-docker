@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+
 TESTS_PATH = Path(__file__).parent
 
 
