@@ -1,10 +1,29 @@
 [project]
 name = "stata-docker"
 version = "0.0.1"
+readme = "README.md"
 requires-python = ">=3.11,<3.12"
+dependencies = [
+  "pyarrow<=14.0.1",
+  "numpy<2"
+]
 
-[tool.black]
-extend-exclude = 'bin/'
+[tool.coverage.run]
+branch = true
+dynamic_context = "test_function"
+omit = [
+  ".venv/*",
+]
+
+[tool.coverage.report]
+fail_under = 100
+skip_covered = true
+show_missing = true
+
+[tool.coverage.html]
+show_contexts = true
+
+[tool.pytest.ini_options]
 
 [tool.ruff]
 line-length = 88
@@ -12,14 +31,19 @@ exclude = [
   ".direnv",
   ".git",
   ".github",
+  ".ipynb_checkpoints",
+  ".pytest_cache",
   ".venv",
   "__pycache__",
-  "bin/",
-  "coverage",
-  "deploy",
+  "docker",
+  "htmlcov",
   "venv",
+  "bin"
 ]
+
+[tool.ruff.lint]
 extend-select = [
+  "A",  # flake8-builtins
   "I",  # isort
   "INP",  # flake8-no-pep420
   "ISC",  # flake8-implicit-str-concat
@@ -31,5 +55,15 @@ extend-ignore = [
   "E731",
 ]
 
+[tool.ruff.lint.isort]
+lines-after-imports = 2
+
 [tool.uv]
-required-version = ">=0.13"
+required-version = ">=0.13.5"
+
+[dependency-groups]
+dev = [
+    "pre-commit<=4.7.0",
+    "pytest<=9.0.3",
+    "ruff<0.16",
+]
