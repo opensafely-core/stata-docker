@@ -118,7 +118,7 @@ fix:
     -just --fmt --unstable
 
 build:
-    docker compose build --pull stata-mp
+    docker compose build --pull prod
 
 # docker leaves files around as root
 clean-logs:
