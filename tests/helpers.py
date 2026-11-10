@@ -48,7 +48,7 @@ def run_stata(command, workspace=None):
     # The log file should always exist, even if the .do file failed to load.
     # If it doesn't, something probably went wrong with running the container itself,
     # so fail and report the process stderr.
-    if not log_file.exists():
+    if not log_file.exists():  # pragma: no cover
         pytest.fail(
             f"Expected log file does not exist.\nStderr: {process.stderr.decode()}"
         )
