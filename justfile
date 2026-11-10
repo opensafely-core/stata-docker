@@ -1,118 +1,125 @@
-# just has no idiom for setting a default value for an environment variable
-# so we shell out, as we need VIRTUAL_ENV in the justfile environment
-export VIRTUAL_ENV  := `echo ${VIRTUAL_ENV:-.venv}`
+import 'justfile.base'
 
-# TODO: make it /scripts on windows?
-export BIN := VIRTUAL_ENV + "/bin"
-
-# Load .env files by default
 set dotenv-load := true
+set positional-arguments := true
 
 export DOCKER_BUILDKIT := "1"
 export BUILD_DATE := `echo $(date +'%y-%m-%dT%H:%M:%S.%3NZ')`
 export VERSION := `echo $(git rev-parse --short HEAD)`
+export STATA_LICENSE := `echo ${STATA_LICENSE:-$(cat stata.lic)}`
 
-
-# list available commands
+# List available commands
 default:
-    @{{ just_executable() }} --list
+    @"{{ just_executable() }}" --list
 
-
-# clean up temporary files
+# Clean up temporary files
 clean:
     rm -rf .venv
 
-
-# ensure valid virtualenv
-virtualenv:
-    #!/usr/bin/env bash
-    # allow users to specify python version in .env
-    PYTHON_VERSION=${PYTHON_VERSION:-python3.11}
-
-    # Error if venv does not contain the version of Python we expect
-    if test -d $VIRTUAL_ENV; then
-        test -e $BIN/$PYTHON_VERSION || \
-        { echo "Did not find $PYTHON_VERSION in $VIRTUAL_ENV (try deleting the virtualenv (just clean) and letting it re-build)"; exit 1; }
-    fi
-
-    # create venv
-    test -d $VIRTUAL_ENV || { uv venv --python $PYTHON_VERSION --seed; }
-
-
-_compile src dst *args: virtualenv
-    #!/usr/bin/env bash
-    # exit if src file is older than dst file (-nt = 'newer than', but we negate with || to avoid error exit code)
-    test "${FORCE:-}" = "true" -o {{ src }} -nt {{ dst }} || exit 0
-    uv pip compile --allow-unsafe --generate-hashes --output-file={{ dst }} {{ src }} {{ args }}
-
-
-# update requirements.prod.txt if requirements.prod.in has changed
-requirements-prod *args:
-    {{ just_executable() }} _compile python-requirements.in python-requirements.txt {{ args }}
-
-
-# update requirements.dev.txt if requirements.dev.in has changed
-requirements-dev *args: requirements-prod
-    {{ just_executable() }} _compile python-requirements.dev.in python-requirements.dev.txt {{ args }}
-
-
-# ensure prod requirements installed and up to date
-prodenv: requirements-prod
-    uv pip install -r python-requirements.txt
-
-_env:
-    #!/usr/bin/env bash
-    if [[ -z "${STATA_LICENSE}" ]]; then
-        export STATA_LICENSE=`echo ${STATA_LICENSE}`
-    else
-        export STATA_LICENSE=`echo $(cat stata.lic)`
-    fi
+# Install production requirements into and remove extraneous packages from venv
+prodenv:
+    uv sync --no-dev
 
 # && dependencies are run after the recipe has run. Needs just>=0.9.9. This is
 # a killer feature over Makefiles.
 #
-# ensure dev requirements installed and up to date
-devenv: prodenv requirements-dev && install-precommit
-    uv pip install -r python-requirements.dev.txt
 
+# Install dev requirements into venv without removing extraneous packages
+devenv: && install-precommit
+    uv sync --inexact
 
-# ensure precommit is installed
+# Ensure precommit is installed
 install-precommit:
     #!/usr/bin/env bash
+    set -euo pipefail
+
     BASE_DIR=$(git rev-parse --show-toplevel)
     test -f $BASE_DIR/.git/hooks/pre-commit || uv run pre-commit install
 
+# Upgrade a single package to the latest version, with cooldown
+upgrade-package package cooldown="7 days ago": && uvmirror devenv
+    uv lock --upgrade-package {{ package }} --exclude-newer "{{ cooldown }}"
 
-# upgrade dev or prod dependencies (specify package to upgrade single package, all by default)
-upgrade env package="": virtualenv
+# Upgrade all packages to the latest versions, with cooldown
+upgrade-all cooldown="7 days ago": && uvmirror devenv
+    uv lock --upgrade --exclude-newer "{{ cooldown }}"
+
+# update the uv mirror requirements file
+uvmirror file="requirements.uvmirror.txt":
+    rm -f {{ file }}
+    uv export --format requirements-txt --frozen --no-hashes --all-groups --all-extras > {{ file }}
+
+# This is the default input command to update-dependencies action
+# https://github.com/bennettoxford/update-dependencies-action
+
+# Upgrade all dependencies with the default cooldown (7 days ago)
+update-dependencies: upgrade-all
+
+# *args is variadic, 0 or more. This allows us to do `just test -k match`, for example.
+
+# Run the tests
+test *args:
+    uv run coverage run --module pytest "$@"
+    uv run coverage report || uv run coverage html
+
+format *args:
+    uv run ruff format --diff --quiet "$@"
+
+lint *args:
+    uv run ruff check "$@" .
+
+lint-actions:
+    {{ docker_run_safe }} -v $(pwd):/repo:ro --workdir /repo kjanat/actionlint:1.17.0@sha256:d484cccadf56b6a356466ade9af4c8e05c5dce1badaf0a9ecd0d7639d68d9c92 -color
+
+lint-docker:
+    {{ docker_run_safe }} -i ghcr.io/hadolint/hadolint:v2.15.1-alpine@sha256:a1d49ae1a4e83c1dbad26b8c1ad7588c8bd1e04f4866b34ad3cac50335198552 < Dockerfile
+
+# Run the various dev checks but does not change any files
+check:
     #!/usr/bin/env bash
-    opts="--upgrade"
-    test -z "{{ package }}" || opts="--upgrade-package {{ package }}"
-    FORCE=true {{ just_executable() }} requirements-{{ env }} $opts
+    set -euo pipefail
 
-black *args=".": devenv
-    uv run black --check {{ args }}
+    failed=0
 
-ruff *args=".": devenv
-    uv run ruff check {{ args }}
+    check() {
+      echo -e "\e[1m=> ${1}\e[0m"
+      rc=0
+      # Run it
+      eval $1 || rc=$?
+      # Increment the counter on failure
+      if [[ $rc != 0 ]]; then
+        failed=$((failed + 1))
+        # Add spacing to separate the error output from the next check
+        echo -e "\n"
+      fi
+    }
 
-# run the various dev checks but does not change any files
-check *args: devenv black ruff
-    docker pull hadolint/hadolint
-    docker run --rm -i hadolint/hadolint < Dockerfile
-    shellcheck *.sh scripts/*.sh
+    check "just check-lockfile"
+    check "just format"
+    check "just lint"
+    check "just lint-actions"
+    check "just lint-docker"
 
-# fix formatting and import sort ordering
-fix: devenv
-    uv run black .
-    uv run ruff --fix .
+    if [[ $failed > 0 ]]; then
+      echo -en "\e[1;31m"
+      echo "   $failed checks failed"
+      echo -e "\e[0m"
+      exit 1
+    fi
 
-build: _env
+# validate uv.lock
+check-lockfile:
+    uv lock --check
+
+# Fix formatting, import sort ordering, and justfile
+fix:
+    -uv run ruff check --fix .
+    -uv run ruff format .
+    -just --fmt --unstable
+
+build:
     docker compose build --pull stata-mp
-
-test *args: devenv
-    uv run pytest {{ args }}
 
 # docker leaves files around as root
 clean-logs:
-	sudo rm -f tests/*.log
+    sudo rm -f tests/*.log
