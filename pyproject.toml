@@ -4,8 +4,7 @@ version = "0.0.1"
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [
-  "pyarrow<=14.0.1",
-  "numpy<2"
+  "pyarrow<=26.0.1",
 ]
 
 [tool.coverage.run]
