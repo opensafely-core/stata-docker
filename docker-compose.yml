@@ -11,7 +11,7 @@ services:
       # path relative to context
       dockerfile: Dockerfile
       # the production stage in the Dockerfile
-      target: stata-prod # CHANGE ME!
+      target: stata-prod
       args:
         # this makes the image work for later cache_from: usage
         - BUILDKIT_INLINE_CACHE=1
