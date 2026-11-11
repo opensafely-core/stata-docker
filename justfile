@@ -74,6 +74,9 @@ lint-actions:
 lint-docker:
     {{ docker_run_safe }} -i ghcr.io/hadolint/hadolint:v2.15.1-alpine@sha256:a1d49ae1a4e83c1dbad26b8c1ad7588c8bd1e04f4866b34ad3cac50335198552 < Dockerfile
 
+shellcheck:
+    {{ docker_run_safe }} -v "$PWD:/mnt:ro" koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d *.sh scripts/*.sh
+
 # Run the various dev checks but does not change any files
 check:
     #!/usr/bin/env bash
@@ -99,6 +102,7 @@ check:
     check "just lint"
     check "just lint-actions"
     check "just lint-docker"
+    check "just shellcheck"
 
     if [[ $failed > 0 ]]; then
       echo -en "\e[1;31m"
