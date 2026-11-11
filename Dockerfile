@@ -190,6 +190,3 @@ ARG BUILD_DATE=unknown
 LABEL org.opencontainers.image.created=$BUILD_DATE
 ARG GITREF=unknown
 LABEL org.opencontainers.image.revision=$GITREF
-
-# set PYTHONUSERBASE for installing user packages
-ENV PYTHONUSERBASE=/usr/local
