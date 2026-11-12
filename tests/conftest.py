@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+
 TESTS_PATH = Path(__file__).parent
 
 
@@ -22,6 +23,6 @@ def cleanup():
 
 @pytest.fixture(autouse=True, scope="session")
 def check_stata_license():
-    if "STATA_LICENSE" not in os.environ:
+    if "STATA_LICENSE" not in os.environ:  # pragma: no cover
         print("No STATA_LICENSE detected")
         sys.exit(1)

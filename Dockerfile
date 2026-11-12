@@ -1,30 +1,93 @@
-# syntax=docker/dockerfile:1.2
+# syntax=docker/dockerfile:1
+# check=error=true
 #################################################
 #
-# We need base python dependencies on both the builder and python images, so
-# create base image with those installed to save installing them twice.
+# Images are structured as shown in this diagram:
+# ┌──────────────────┐            ┌──────────────────┐
+# │   base-python    ├────────────►     builder      │
+# └────────┬─────────┘            └──────────┬───────┘
+#          │                                 │
+#          │                                 │COPY FROM
+#          │     ┌──────────────────┐        │
+#          └─────► new-project-base ◄────────┘
+#                └────────┬─┬───────┘
+#                         │ │
+#                         │ │
+# ┌──────────────────┐    │ │     ┌──────────────────┐
+# │ new-project-prod ◄────┘ └─────► new-project-dev  │
+# └──────────────────┘            └──────────────────┘
+# The goal of this stages structure is to a) minimise the size of the *prod* image by
+# not including build dependencies and b) to make rebuilding the *dev* fast in local
+# development, by avoiding invalidating the layer cache every time we change python
+# code.
 #
-# hadolint ignore=DL3006
-FROM ghcr.io/opensafely-core/base-action:22.04 as base
+#################################################
+#
+# Create base image with python installed.
+# All Dockerfiles should start from the base-docker image
 
-# Add deadsnakes PPA for installing new Python versions
-# ensure fully working base python3.11 installation
+# These build args have defaults, but are usually set from docker/.env. They
+# are used in FROM lines, so need to be declared globally and have defaults
+# set.
+ARG UBUNTU_VERSION=22.04
+ARG UV_VERSION=0.13
+#
+# DL3007 ignored because we specifically always want to build on
+# the latest base image, by design.
+# hadolint ignore=DL3007
+FROM ghcr.io/opensafely-core/base-action:${UBUNTU_VERSION} AS base-python
+
+
+# we are going to use an apt cache on the host, so disable the default debian
+# docker clean up that deletes that cache on every apt install
+RUN rm -f /etc/apt/apt.conf.d/docker-clean
+
+# use deadsnakes ppa to install a fully working base python installation
 # see: https://gist.github.com/tiran/2dec9e03c6f901814f6d1e8dad09528e
 # use space efficient utility from base image
+RUN --mount=type=cache,target=/var/cache/apt <<'EOF'
+UBUNTU_CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
+KEY_PATH=/usr/share/keyrings/deadsnakes.asc
+KEY_URL='https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xf23c5a6cf475977595c89f51ba6932366a755776'
+/usr/lib/apt/apt-helper download-file "$KEY_URL" "$KEY_PATH"
+echo "deb [signed-by=$KEY_PATH] https://ppa.launchpadcontent.net/deadsnakes/ppa/ubuntu ${UBUNTU_CODENAME} main" > /etc/apt/sources.list.d/deadsnakes-ppa.list
+EOF
 
+# install any additional system dependencies, plus python<version> and
+# python<version>-dev (needed for stata's python integration)
+# NOTE: ensure .python-version is not excluded in .dockerignore
+# stata's dependencies.txt includes libpng16 and imagemagick
+# We need to edit imagemagick policy to allow eps conversion, which is disabled by default
 RUN --mount=type=cache,target=/var/cache/apt \
-    echo "deb https://ppa.launchpadcontent.net/deadsnakes/ppa/ubuntu jammy main" > /etc/apt/sources.list.d/deadsnakes-ppa.list &&\
-    /usr/lib/apt/apt-helper download-file 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xf23c5a6cf475977595c89f51ba6932366a755776' /etc/apt/trusted.gpg.d/deadsnakes.asc
-
-# stata needs libpng16, install python dependencies, and imagemagick
-# edit imagemagick policy to allow eps conversion, which is disabled by default
-COPY packages.txt /root/packages.txt
-RUN --mount=type=cache,target=/var/cache/apt \
-    /root/docker-apt-install.sh /root/packages.txt &&\
+    --mount=type=bind,source=dependencies.txt,target=/dependencies.txt \
+    --mount=type=bind,source=.python-version,target=/.python-version \
+    /root/docker-apt-install.sh /dependencies.txt \
+    "python$(cat /.python-version)" "python$(cat /.python-version)-dev" \
+    && \
     sed -i -z 's#<!-- disable ghostscript.*</policymap>#</policymap>#g' /etc/ImageMagick-6/policy.xml
 
-# set PYTHONUSERBASE for installing user packages
-ENV PYTHONUSERBASE=/usr/local
+# uv env var documentation: https://docs.astral.sh/uv/reference/environment/
+# copy files rather than symlink since the cache and the target are on different filesystems
+ENV UV_LINK_MODE=copy
+# compile at installation time, not import time
+ENV UV_COMPILE_BYTECODE=1
+# we are using system python
+# (as we require dynamic linking of openssl for security reasons)
+ENV UV_PYTHON_DOWNLOADS=never
+# set the directory for the venv
+ENV UV_PROJECT_ENVIRONMENT="/opt/venv"
+
+##################################################
+#
+# Reusable uv CLI layer
+#
+# This allows us to specify the version in one place, and also works around
+# a limitation that you cannot use build args directly in `COPY --from`.
+#
+# See: https://github.com/moby/buildkit/issues/2412 for more info
+#
+#
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv-cli
 
 ##################################################
 #
@@ -36,43 +99,61 @@ ENV PYTHONUSERBASE=/usr/local
 #
 # We use a separate, disposable build image to avoid carrying the build
 # dependencies into the production image.
-FROM base as builder
+FROM base-python AS builder
 
 # Install any system build dependencies
-COPY build-dependencies.txt /tmp/build-dependencies.txt
 RUN --mount=type=cache,target=/var/cache/apt \
-    /root/docker-apt-install.sh /tmp/build-dependencies.txt
+    --mount=type=bind,source=dependencies-build.txt,target=/dependencies-build.txt \
+    /root/docker-apt-install.sh /dependencies-build.txt
 
-# Install python packages
+# Pull in the binaries from our pinned uv-cli stage
+COPY --from=uv-cli /uv /uvx /usr/local/bin/
+
+# Install everything in venv for isolation from system python libraries
+RUN uv venv
+
 # The cache mount means a) /root/.cache is not in the image, and b) it's preserved
 # between docker builds locally, for faster dev rebuild.
-COPY python-requirements.txt /tmp/python-requirements.txt
-
-# DL3042: using cache mount instead
-# DL3013: we always want latest pip/setuptools/wheel, at least for now
-# Install with the --user option so we can copy dependencies in the final image
-#
-# Note that we can't use a venv here because stata gets itself confused
-# Using a venv runs into the same error seen here with embedded python in swift
-# https://discuss.python.org/t/fatal-python-error-init-fs-encoding-failed-to-get-the-python-codec-of-the-filesystem-encoding/3173/11
-# hadolint ignore=DL3042,DL3013
+# Setting --directory /root lets `uv` detect the pyproject.toml, uv.lock etc.
 RUN --mount=type=cache,target=/root/.cache \
-    python3.11 -m pip install -U --user pip setuptools wheel && \
-    python3.11 -m pip install --user  --require-hashes  --requirement /tmp/python-requirements.txt
-
+    --mount=type=bind,source=pyproject.toml,target=/root/pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=/root/uv.lock \
+    uv sync --frozen --no-dev --no-install-project --directory /root
 
 ##################################################
+#
+# Base project image
+#
+# Ok, we've built everything we need, build an image with all dependencies but
+# no code.
+#
+# Not including the code at this stage has two benefits:
+#
+# 1) this image only rebuilds when the handlful of files needed to build
+#    the base project image changes. If we do `COPY . /app` now, this will
+#    rebuild when *any* file changes.
+#
+# 2) Ensures we *have* to mount the volume for dev image, as there's no embedded
+#    version of the code. Otherwise, we could end up accidentally using the
+#    version of the code included when the prod image was built.
+FROM base-python AS stata-base
 
-FROM base as stata-prod
+ENV VIRTUAL_ENV=/opt/venv/ \
+    PATH="/opt/venv/bin:$PATH"
 
-# copy site-packages files over from builder image to get the installed python dependencies.
-# These will have root:root ownership, but are readable by all.
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+# copy venv over from builder image. These will have root:root ownership, but
+# are readable by all.
+COPY --from=builder /opt/venv /opt/venv
 
-# Some static metadata for this specific image, as defined by:
-# https://github.com/opencontainers/image-spec/blob/master/annotations.md#pre-defined-annotation-keys
-# The org.opensafely.action label is used by the jobrunner to indicate this is
-# an approved action image to run.
+##################################################
+#
+# Production image
+#
+# Copy code in, add proper metadata
+FROM stata-base AS stata-prod
+
+# Adjust this metadata to fit project. Note that the base-docker image does set
+# some basic metadata.
 LABEL org.opencontainers.image.title="stata-mp" \
       org.opencontainers.image.description="Stata action for opensafely.org" \
       org.opencontainers.image.source="https://github.com/opensafely-core/stata-docker" \
@@ -82,6 +163,16 @@ ENV STATA_SITE=/usr/local/ado
 RUN mkdir -p /usr/local/stata /workspace $STATA_SITE && \
     chmod 777 $STATA_SITE && \
     ln -s /tmp/stata.lic /usr/local/stata/stata.lic
+
+# Configure Python for Stata
+# We need to point the python_exec at the system python, because the /opt/venv
+# python doesn't contain the system libaries, and we need to set the userpath to
+# the venv's site packages, to make sure we get our python dependencies
+RUN --mount=type=bind,source=.python-version,target=/.python-version \
+    python_version="$(cat /.python-version)" && \
+    printf 'set python_exec "/usr/bin/python%s"\npython set userpath "/opt/venv/lib/python%s/site-packages"\n' \
+        "$python_version" "$python_version" > /usr/local/stata/sysprofile.do
+
 WORKDIR /workspace
 
 COPY bin/ /usr/local/stata
@@ -93,7 +184,9 @@ COPY script-wrapper.sh /usr/local/bin/script-wrapper.sh
 ENV ACTION_EXEC="/usr/local/bin/script-wrapper.sh"
 ENV INTERACTIVE_EXEC="/usr/local/bin/stata"
 
-# tag with build info as the very last step, as it will never be cached
-ARG BUILD_DATE
-ARG VERSION
-LABEL org.opencontainers.image.created=$BUILD_DATE org.opencontainers.image.revision=$VERSION
+# finally, tag with build information. These will change regularly, therefore
+# we do them as the last action.
+ARG BUILD_DATE=unknown
+LABEL org.opencontainers.image.created=$BUILD_DATE
+ARG GITREF=unknown
+LABEL org.opencontainers.image.revision=$GITREF
