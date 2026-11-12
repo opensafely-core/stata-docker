@@ -1,3 +1,21 @@
+######## Tooling versions for Renovate updates ########
+
+# If adding a new docker tool, find the digest for the version you're adding by running e.g.
+# docker buildx imagetools inspect kjanat/actionlint:1.17.0
+
+# renovate: datasource=docker depName=kjanat/actionlint versioning=docker
+actionlint_version := "1.17.1@sha256:c0a63b3e5c974c2466ead39404b70e448176beaff8c5ec7af0b2e96191aea661"
+
+# renovate: datasource=docker depName=koalaman/shellcheck versioning=docker
+shellcheck_version := "v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d"
+
+# renovate: datasource=docker depName=ghcr.io/hadolint/hadolint versioning=docker
+hadolint_version := "v2.15.1-alpine@sha256:a1d49ae1a4e83c1dbad26b8c1ad7588c8bd1e04f4866b34ad3cac50335198552"
+
+# renovate: datasource=docker depName=renovate/renovate versioning=docker
+renovate_version := "44.236.2@sha256:55deecada47b7a8b1bf07218c91fd62f380d374a2b87e08570af5bfcd63c34d8"
+
+
 ######## Reusable variables ########
 # Run Docker with minimum possible privileges. Note that if you mount any directories
 # you must still ensure these are mounted read-only.
