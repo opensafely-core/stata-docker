@@ -175,6 +175,31 @@
     //   "matchDepNames": ["Django"],
     //   "allowedVersions": "<6.0"
     // },
+    // Group justfile tooling updates (docker images etc) into a single PR
+    {
+      "matchManagers": ["custom.regex"],
+      // this is technically redundant as the custom manager currently also only
+      // matches justfiles, but it's included here in case we extend the manager later
+      "matchFileNames": ["**/justfile", "**/Justfile", "**/.justfile", "**/justfile.base"],
+      "groupName": "justfile tools",
+      // minimumReleaseAge works as long as the datasource provides release timestamps.
+      // Docker Hub provides them; ghcr and others don't.
+      // https://github.com/renovatebot/renovate/issues/39064
+      // timestamp-optional means that we still get updates when there's no release timestamp
+      // to check against
+      "minimumReleaseAge": "7 days",
+      "minimumReleaseAgeBehaviour": "timestamp-optional",
+      "schedule": [
+        "* 0-3 * * WED"
+      ],
+      // this is a guard in case `docker:pinDigests` is added to the `extends` section in
+      // future. This would apply to the docker datasource, and it would attempt to run,
+      // but in order to pin digests, renovate has to insert a digest where there isn't one
+      // already (i.e. notice a version without @sha... and insert it). There are ways to do
+      // that, but I don't think it's worth it; instead we just expect that the justfile comments
+      // will include digests if we want to update by digest.
+      "pinDigests": false
+    },
   ],
   // Include vulnerability alerts; this uses dependabot and requires that depenency graph and
   // dependabot alerts are enabled in the repo
