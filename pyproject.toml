@@ -63,7 +63,7 @@ required-version = ">=0.13.5"
 [dependency-groups]
 dev = [
     "pre-commit<=4.7.0",
-    "pytest<=9.0.3",
-    "ruff<0.16",
-    "coverage<=7.17.1",
+    "pytest<=9.2.0",
+    "ruff<0.18",
+    "coverage<=7.17.3",
 ]
