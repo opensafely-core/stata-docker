@@ -13,7 +13,7 @@ shellcheck_version := "v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a3
 hadolint_version := "v2.15.1-alpine@sha256:a1d49ae1a4e83c1dbad26b8c1ad7588c8bd1e04f4866b34ad3cac50335198552"
 
 # renovate: datasource=docker depName=renovate/renovate versioning=docker
-renovate_version := "44.249.2@sha256:0bae072a84222163d0883c32f8ebf5521b6ccd625b468ecee454895c9f460cbe"
+renovate_version := "44.252.8@sha256:be84f632bdf6c89a1cf8bc611056ff43ec944dd80617fd93c6039577102e79c7"
 
 
 ######## Reusable variables ########
