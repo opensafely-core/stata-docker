@@ -15,13 +15,13 @@ jobs:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: false
-    - uses: opensafely-core/setup-action@1f93a08c6e31a75b0908fcac5d25c2cf729c31f2 # v1.8.0
+    - uses: opensafely-core/setup-action@fc0f6e03d1a6fe8c53ff686b310dd08be072b8c8 # v1.9.0
       with:
         install-just: true
         install-uv: true
         cache: uv
 
-    - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+    - uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
       id: generate-token
       with:
         app-id: ${{ vars.CREATE_PR_APP_ID }}  # opensafely-core Create PR app
@@ -35,7 +35,7 @@ jobs:
 
     - name: Notify slack of PR
       if: ${{ steps.update.outputs.pull-request-operation != 'none' }}
-      uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d  # v4.0.0
+      uses: slackapi/slack-github-action@0bc3581177d9a0f8d555e07689384b376528e8fa  # v4.1.0
       with:
         method: chat.postMessage
         token: ${{ secrets.BENNETTBOT_SLACK_BOT_TOKEN }}
